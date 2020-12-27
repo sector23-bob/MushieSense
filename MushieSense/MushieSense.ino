@@ -192,7 +192,7 @@ void writeToLittleFSLog(const char * message, DateTime now) {
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial) {
+  while (! Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
   
@@ -322,7 +322,7 @@ void loop() {
   
     if (loopCnt % (HEATER_MULT*LOG_CNT) == 0) {
       // Do that maintenance
-      enableHeater = !enableHeater;
+      enableHeater = ! enableHeater;
       sht31.heater(enableHeater);
       Serial.print("Heater Enabled State: ");
       if (sht31.isHeaterEnabled()) {
