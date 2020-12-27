@@ -66,7 +66,7 @@ void writeFile(const char * path, const char * message) {
   if (! file.print(message)) {
     Serial.println("Write failed");
   }
-  delay(2000); // Make sure the CREATE and LASTWRITE times are different
+  //delay(2000); // Make sure the CREATE and LASTWRITE times are different
   file.close();
 }
 
