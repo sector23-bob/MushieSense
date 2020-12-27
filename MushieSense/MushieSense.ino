@@ -18,7 +18,12 @@
 // Not Colors
 #define LOG_CNT 10 // Number of loops to average values over before logging
 #define LCD_MULT 5 // Number of logging events before LCD update
-#define HEATER_CNT 120 // Max 255. The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning, set along w/ DELAY.
+
+/*
+ * The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning
+ */
+#define HEATER_MULT 25
+
 #define DELAY 120 // Delay per loop, in ms
 #define MAXTEMP 90.0 // Set ref. Stamets
 #define MINTEMP 55.0  // Set ref. Stamets
@@ -39,7 +44,8 @@ bool enableHeater = false;
 // Real-time clock
 RTC_PCF8523 rtc;
 
-uint8_t loopCnt = 0;
+// Loop counter
+uint16_t loopCnt = 0;
 
 // Arrays for sensor readings
 float tmpVals[LOG_CNT];
@@ -151,7 +157,8 @@ void setup() {
     abort();
   }
 
-  if (! rtc.initialized() || rtc.lostPower()) {
+  //if (! rtc.initialized() || rtc.lostPower()) {
+  if (true) {
     Serial.println("RTC is not initialized, setting...");
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }
@@ -178,7 +185,7 @@ void setup() {
     
   /*** End sensors test ***/
   
-  time = millis() - time; // TODO - log this
+  time = millis() - time; // TODO - log this?
   Serial.print("Took "); Serial.print(time); Serial.println(" ms");
 
   lcd.setBacklight(WHITE);
@@ -237,29 +244,26 @@ void loop() {
       updateDisplay(tmpAvg, humAvg, co2Avg);
     }
 
-    
     // Reset sensor arrays
     memset(tmpVals, 0.0, sizeof(tmpVals));
     memset(humVals, 0.0, sizeof(humVals));
     memset(co2Vals, 0.0, sizeof(co2Vals));
-  }
+  
+    if (loopCnt % HEATER_MULT*LOG_CNT == 0) {
+      // Do that maintenance
+      enableHeater = !enableHeater;
+      sht31.heater(enableHeater);
+      Serial.print("Heater Enabled State: ");
+      if (sht31.isHeaterEnabled()) {
+        Serial.println("ENABLED");
+      }
+      else {
+        Serial.println("DISABLED");
+      }
 
-  if (loopCnt % HEATER_CNT == 0) {
-    // Do that maintenance
-    enableHeater = !enableHeater;
-    sht31.heater(enableHeater);
-    Serial.print("Heater Enabled State: ");
-    if (sht31.isHeaterEnabled()) {
-      Serial.println("ENABLED");
+      // Reset loop
+      loopCnt = 0;
     }
-    else {
-      Serial.println("DISABLED");
-    }
-  }
-
-  // Reset the loop once our count gets high enough, no need to use more than a byte
-  if (loopCnt + LOG_CNT > 255) {
-    loopCnt = 0;
   }
   /*** End housekeeping ***/
     
