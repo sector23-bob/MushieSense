@@ -16,11 +16,14 @@
 #define WHITE 0x7
 
 // Not Colors
-#define THRESHOLD 30 // Loop threshold for housekeeping. Keep this around 30 to keep the SHT31 happy.
-#define MAXTEMP 90.0
-#define MINTEMP 65.0
-#define MAXHUM 90.0
-#define MINHUM 75.0
+#define LOG_CNT 10 // Number of loops to average values over before logging
+#define LCD_MULT 5 // Number of logging events before LCD update
+#define HEATER_CNT 120 // Max 255. The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning, set along w/ DELAY.
+#define DELAY 120 // Delay per loop, in ms
+#define MAXTEMP 90.0 // Set ref. Stamets
+#define MINTEMP 55.0  // Set ref. Stamets
+#define MAXHUM 90.0 // Set ref. Stamets
+#define MINHUM 25.0 // Set ref. Stamets
 #define MAXCO2 0.0 // TODO - set this ref. Stamets
 #define MINCO2 0.0 // TODO - set this ref. Stamets
 
@@ -39,9 +42,9 @@ RTC_PCF8523 rtc;
 uint8_t loopCnt = 0;
 
 // Arrays for sensor readings
-float tmpVals[THRESHOLD];
-float humVals[THRESHOLD];
-float co2Vals[THRESHOLD];
+float tmpVals[LOG_CNT];
+float humVals[LOG_CNT];
+float co2Vals[LOG_CNT];
 
 /*!
   @brief Read LCD buttons - slug code 
@@ -74,14 +77,16 @@ void handleButtons() {
   @param humAvg Average humidity calculated
   @param co2Avg Average CO2 calculated TODO
  */
-void updateDisplay(float tmpAvg, float humAvg, float co2Avg) {
-    lcd.setCursor(0,0);
-    lcd.print("Temp: "); lcd.print(tmpAvg); lcd.print(" F");
-    Serial.print("Temp: "); Serial.print(tmpAvg); Serial.print("\t\t");
-    
-    lcd.setCursor(0,1);
-    lcd.print("Hum: "); lcd.print(humAvg); lcd.print("%");
-    Serial.print("Hum: "); Serial.println(humAvg);
+void updateDisplay(float t, float h, float c) {
+  char buff[1024];
+  
+  sprintf(buff, "Temp: %f F", t);
+  lcd.setCursor(0,0);
+  lcd.print(buff);
+
+  sprintf(buff, "Hum: %f pct", h);
+  lcd.setCursor(0,1);
+  lcd.print(buff);
 }
 
 /*!
@@ -90,11 +95,11 @@ void updateDisplay(float tmpAvg, float humAvg, float co2Avg) {
   @param humAvg Average humidity calculated
   @param co2Avg Average CO2 calculated TODO
  */
-void freakOut(float tmpAvg, float humAvg, float co2Avg) {
-    bool tmpExceed = ((tmpAvg > MAXTEMP) or (tmpAvg < MINTEMP));
-    bool humExceed = ((humAvg > MAXHUM) or (humAvg < MINHUM));
-    bool co2Exceed = ((co2Avg > MAXCO2) or (co2Avg < MINCO2));
-    if (tmpExceed or humExceed or co2Exceed) {
+void freakOut(float t, float h, float c) {
+    bool tmpExceed = ((t > MAXTEMP) or (t < MINTEMP));
+    bool humExceed = ((h > MAXHUM) or (h < MINHUM));
+    bool co2Exceed = false; //((c > MAXCO2) or (c < MINCO2)); // TODO
+    if ((tmpExceed or humExceed) or co2Exceed) {
       lcd.setBacklight(RED);
     } else {
       lcd.setBacklight(GREEN);
@@ -109,18 +114,20 @@ void handleSensorError() {
 }
 
 /*!
-  @brief Log data to long-term storage TODO
-  @param tmpAvg Average temperature calculated
-  @param humAvg Average humidity calculated
-  @param co2Avg Average CO2 calculated TODO
-  @param not Time of logging event
+  @brief Log data to serial and long-term storage TODO
+  @param t Temperature
+  @param h Humidity percent
+  @param c eCO2 calculated TODO
+  @param now Time of logging event
  */
-void logData(float tmpAvg, float humAvg, float co2Avg, DateTime now) {
-  ;
+void logData(float t, float h, float c, DateTime now) {
+  char buff[1024];
+  sprintf(buff, "%s | %f | %f | %f ", now.timestamp().c_str(), t, h, c);
+  Serial.println(buff);
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
@@ -182,67 +189,80 @@ void loop() {
   handleButtons();
   
   /*** Read sensor vals ***/
-  float t = sht31.readTemperature();
+  float t = sht31.readTemperature()*1.8 + 32.0; // Convert to F
   float h = sht31.readHumidity();
   float c = 0.0; // CO2 sensor TODO
   
   if (! isnan(t)) {
-    tmpVals[loopCnt % THRESHOLD] = t;
+    tmpVals[loopCnt % LOG_CNT] = t;
   } else { 
     Serial.println("Failed to read temperature");
   }
   
   if (! isnan(h)) {
-    humVals[loopCnt % THRESHOLD] = h;
+    humVals[loopCnt % LOG_CNT] = h;
   } else { 
     Serial.println("Failed to read humidity");
   }
 
   if (! isnan(c)) {
-    co2Vals[loopCnt % THRESHOLD] = h;
+    co2Vals[loopCnt % LOG_CNT] = c;
   } else {
     Serial.println("Failed to read CO2");
   }
   /*** End sensor read ***/
-  
-  /*** Do some housekeeping - maintenance, logging, and output - once the loop count threshold is reached ***/
-  if (++loopCnt == THRESHOLD) {
-    lcd.clear();
 
+  // Do we need to freak out?
+  freakOut(t, h, c);
+
+  /*** Do some housekeeping - maintenance, logging, and output - once the loop count thresholds are reached ***/
+  if (++loopCnt % LOG_CNT == 0) {
     // Get averages
     float tmpSum = 0.0;
     float humSum = 0.0;
     float co2Sum = 0.0;
 
-    for (int i = 0; i < THRESHOLD; i++) {
+    for (int i = 0; i < LOG_CNT; i++) {
       tmpSum += tmpVals[i];
       humSum += humVals[i];
       co2Sum += co2Vals[i];
     }
-    float tmpAvg = (tmpSum/THRESHOLD)*1.8 + 32.0;
-    float humAvg = humSum/THRESHOLD;
-    float co2Avg = co2Sum/THRESHOLD;
-
-    // Display/log averages
-    updateDisplay(tmpAvg, humAvg, co2Avg);
+    float tmpAvg = (tmpSum/LOG_CNT);
+    float humAvg = humSum/LOG_CNT;
+    float co2Avg = co2Sum/LOG_CNT;
     logData(tmpAvg, humAvg, co2Avg, rtc.now());
 
+    if (loopCnt % LCD_MULT*LOG_CNT == 0) {
+      lcd.clear();
+      updateDisplay(tmpAvg, humAvg, co2Avg);
+    }
+
+    
+    // Reset sensor arrays
+    memset(tmpVals, 0.0, sizeof(tmpVals));
+    memset(humVals, 0.0, sizeof(humVals));
+    memset(co2Vals, 0.0, sizeof(co2Vals));
+  }
+
+  if (loopCnt % HEATER_CNT == 0) {
     // Do that maintenance
     enableHeater = !enableHeater;
     sht31.heater(enableHeater);
     Serial.print("Heater Enabled State: ");
-    if (sht31.isHeaterEnabled())
+    if (sht31.isHeaterEnabled()) {
       Serial.println("ENABLED");
-    else
-      Serial.println("DISABLED");
-
-    // Reset the loop once our count gets high enough, no need to use more than a byte
-    if ((loopCnt % 240) == 0) {
-      loopCnt = 0;
     }
+    else {
+      Serial.println("DISABLED");
+    }
+  }
+
+  // Reset the loop once our count gets high enough, no need to use more than a byte
+  if (loopCnt + LOG_CNT > 255) {
+    loopCnt = 0;
   }
   /*** End housekeeping ***/
     
-  delay(100); // Read at ~10Hz
+  delay(DELAY);
 
 }
