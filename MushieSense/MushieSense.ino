@@ -57,6 +57,42 @@ float tmpVals[LOG_CNT];
 float humVals[LOG_CNT];
 float co2Vals[LOG_CNT];
 
+/*** Begin LittleFS helper functions ***/
+/*! 
+  @brief Write a message to a file. Stolen shamelessly from example code.
+  @param path Path of file to be written
+  @param message Message to write
+ */
+void writeFile(const char * path, const char * message) {
+  File file = LittleFS.open(path, "w");
+  if (! file) {
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+  if (! file.print(message)) {
+    Serial.println("Write failed");
+  }
+  delay(2000); // Make sure the CREATE and LASTWRITE times are different
+  file.close();
+}
+
+/*!
+  @brief Append a message to an existing file. Stolen shamelessly from example code.
+  @param path Path of file to append to
+  @param message Message to be appended
+ */
+void appendFile(const char * path, const char * message) {
+  File file = LittleFS.open(path, "a");
+  if (! file) {
+    Serial.println("Failed to open file for appending");
+    return;
+  }
+  if (! file.print(message)) {
+    Serial.println("Append failed");
+  }
+}
+/*** End LittleFS helpers ***/
+
 /*!
   @brief Read LCD buttons - slug code 
  */
@@ -103,9 +139,9 @@ void updateDisplay(float t, float h, float c) {
   @param co2Avg Average CO2 calculated TODO
  */
 void freakOut(float t, float h, float c) {
-    bool tmpExceed = ((t > MAXTEMP) or (t < MINTEMP));
-    bool humExceed = ((h > MAXHUM) or (h < MINHUM));
-    bool co2Exceed = false; //((c > MAXCO2) or (c < MINCO2)); // TODO
+    bool tmpExceed = (t > MAXTEMP) or (t < MINTEMP);
+    bool humExceed = (h > MAXHUM) or (h < MINHUM);
+    bool co2Exceed = false; //(c > MAXCO2) or (c < MINCO2); // TODO
     if ((tmpExceed or humExceed) or co2Exceed) {
       lcd.setBacklight(RED);
     } else {
@@ -124,67 +160,33 @@ void handleSensorError() {
   @brief Log data to serial and long-term storage TODO
   @param t Temperature
   @param h Humidity percent
-  @param c eCO2 calculated TODO
+  @param c eCO2 calculated @TODO
   @param now Time of logging event
  */
 void logData(float t, float h, float c, DateTime now) {
-  char buff[1024];
-  sprintf(buff, "%s | %f | %f | %f ", now.timestamp().c_str(), t, h, c);
+  char message[1024];
+  sprintf(message, "%s | %f | %f | %f ", now.timestamp().c_str(), t, h, c);
 
-  writeToLittleFSLog(buff, now);
-  
-  Serial.println(buff);
-}
+  //Serial.println(message);
 
-/*** Begin LittleFS helper functions ***/
-/*! 
-  @brief Write a message to a file. Stolen shamelessly from example code.
-  @param path Path of file to be written
-  @param message Message to write
- */
-void writeFile(const char * path, const char * message) {
-  File file = LittleFS.open(path, "w");
-  if (! file) {
-    Serial.println("Failed to open file for writing");
-    return;
-  }
-  if (! file.print(message)) {
-    Serial.println("Write failed");
-  }
-  delay(2000); // Make sure the CREATE and LASTWRITE times are different
-  file.close();
+  writeToLittleFSLog(message, now);
 }
-
-/*!
-  @brief Append a message to an existing file. Stolen shamelessly from example code.
-  @param path Path of file to append to
-  @param message Message to be appended
- */
-void appendFile(const char * path, const char * message) {
-  File file = LittleFS.open(path, "a");
-  if (! file) {
-    Serial.println("Failed to open file for appending");
-    return;
-  }
-  if (! file.print(message)) {
-    Serial.println("Append failed");
-  }
-}
-/*** End LittleFS helpers ***/
  
 /*!
   @brief Write to a log file in memory using LittleFS
   @param message Message to be written
-  @param now Time of logging event
  */
 void writeToLittleFSLog(const char * message, DateTime now) {
-  String date = now.toString("YYYYMMDD-hh");
-  String fname = "/" + date + ".txt";
-  if (! LittleFS.exists(fname.c_str())) {
-    writeFile(fname.c_str(), (now.timestamp() + " | Begin log\n").c_str());
+  char buf[32] = "YYYYMMDD-hh";
+  char * date = now.toString(buf);
+  char fname[64];
+  sprintf(fname, "/%s.log", date);
+  if (! LittleFS.exists(fname)) {
+    Serial.print("Created file: "); Serial.println(fname);
+    writeFile(fname, (now.timestamp() + " | Begin log\n").c_str());
   }
-  appendFile(fname.c_str(), message);
-  appendFile(fname.c_str(), "\n");
+  appendFile(fname, message);
+  appendFile(fname, "\n");
 
   File file = LittleFS.open(fname, "r");
   Serial.printf("File size: %d\n", file.size());
@@ -199,7 +201,7 @@ void setup() {
   Serial.println("Initializing...");
   int time = millis();
 
-  /*** Initialize sensor arrays ***/
+  /*** Initialize sensor read arrays ***/
   memset(tmpVals, 0.0, sizeof(tmpVals));
   memset(humVals, 0.0, sizeof(humVals));
   memset(co2Vals, 0.0, sizeof(co2Vals));
@@ -219,10 +221,11 @@ void setup() {
   if (true) {
     Serial.println("RTC is not initialized, setting...");
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }
+  }  
+  rtc.adjust(DateTime(2000, 1, 1, 8, 59, 30)); // Testing datetime
   rtc.start();
-  int offset = 0; // Just in case
-  rtc.calibrate(PCF8523_TwoHours, offset);
+  //int offset = 0; // There's a whole thing about this, I don't know that it's super important
+  //rtc.calibrate(PCF8523_TwoHours, offset);
   Serial.print("RTC up at "); Serial.println(rtc.now().timestamp());
   /*** End RTC setup ***/
 
@@ -337,7 +340,7 @@ void loop() {
     }
   }
   /*** End housekeeping ***/
-    
+  
   delay(DELAY);
 
 }
