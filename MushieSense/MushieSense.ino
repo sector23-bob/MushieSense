@@ -178,7 +178,7 @@ void appendFile(const char * path, const char * message) {
   @param now Time of logging event
  */
 void writeToLittleFSLog(const char * message, DateTime now) {
-  String date = now.toString("YYYYMMDD");
+  String date = now.toString("YYYYMMDD-hh");
   String fname = "/" + date + ".txt";
   if (! LittleFS.exists(fname.c_str())) {
     writeFile(fname.c_str(), (now.timestamp() + " | Begin log\n").c_str());
