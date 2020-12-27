@@ -305,7 +305,7 @@ void loop() {
       humSum += humVals[i];
       co2Sum += co2Vals[i];
     }
-    float tmpAvg = (tmpSum/LOG_CNT);
+    float tmpAvg = tmpSum/LOG_CNT;
     float humAvg = humSum/LOG_CNT;
     float co2Avg = co2Sum/LOG_CNT;
 
