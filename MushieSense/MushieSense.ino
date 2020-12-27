@@ -18,8 +18,8 @@
 #define WHITE 0x7
 
 // Not Colors
-#define LOG_CNT 10 // Number of loops to average values over before logging
-#define LCD_MULT 5 // Number of logging events before LCD update
+#define LOG_CNT 20 // Number of loops to average values over before logging
+#define LCD_MULT 2 // Number of logging events before LCD update
 
 /*
  * The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning.
@@ -27,7 +27,7 @@
  * 
  * Feather HUZZAH ESP8266:  19
  */
-#define HEATER_MULT 19
+#define HEATER_MULT 9
 
 #define DELAY 120 // Delay per loop, in ms
 #define MAXTEMP 90.0 // Set ref. Stamets
@@ -89,15 +89,11 @@ void handleButtons() {
   @param co2Avg Average CO2 calculated TODO
  */
 void updateDisplay(float t, float h, float c) {
-  char buff[1024];
-  
-  sprintf(buff, "Temp: %f F", t);
   lcd.setCursor(0,0);
-  lcd.print(buff);
+  lcd.printf("Temp: %f F", t);
 
-  sprintf(buff, "Hum: %f pct", h);
   lcd.setCursor(0,1);
-  lcd.print(buff);
+  lcd.printf("Hum: %f pct", h);
 }
 
 /*!
@@ -134,7 +130,64 @@ void handleSensorError() {
 void logData(float t, float h, float c, DateTime now) {
   char buff[1024];
   sprintf(buff, "%s | %f | %f | %f ", now.timestamp().c_str(), t, h, c);
+
+  writeToLittleFSLog(buff, now);
+  
   Serial.println(buff);
+}
+
+/*** Begin LittleFS helper functions ***/
+/*! 
+  @brief Write a message to a file. Stolen shamelessly from example code.
+  @param path Path of file to be written
+  @param message Message to write
+ */
+void writeFile(const char * path, const char * message) {
+  File file = LittleFS.open(path, "w");
+  if (! file) {
+    Serial.println("Failed to open file for writing");
+    return;
+  }
+  if (! file.print(message)) {
+    Serial.println("Write failed");
+  }
+  delay(2000); // Make sure the CREATE and LASTWRITE times are different
+  file.close();
+}
+
+/*!
+  @brief Append a message to an existing file. Stolen shamelessly from example code.
+  @param path Path of file to append to
+  @param message Message to be appended
+ */
+void appendFile(const char * path, const char * message) {
+  File file = LittleFS.open(path, "a");
+  if (! file) {
+    Serial.println("Failed to open file for appending");
+    return;
+  }
+  if (! file.print(message)) {
+    Serial.println("Append failed");
+  }
+}
+/*** End LittleFS helpers ***/
+ 
+/*!
+  @brief Write to a log file in memory using LittleFS
+  @param message Message to be written
+  @param now Time of logging event
+ */
+void writeToLittleFSLog(const char * message, DateTime now) {
+  String date = now.toString("YYYYMMDD");
+  String fname = "/" + date + ".txt";
+  if (! LittleFS.exists(fname.c_str())) {
+    writeFile(fname.c_str(), (now.timestamp() + " | Begin log\n").c_str());
+  }
+  appendFile(fname.c_str(), message);
+  appendFile(fname.c_str(), "\n");
+
+  File file = LittleFS.open(fname, "r");
+  Serial.printf("File size: %d\n", file.size());
 }
 
 void setup() {
@@ -252,8 +305,11 @@ void loop() {
     float tmpAvg = (tmpSum/LOG_CNT);
     float humAvg = humSum/LOG_CNT;
     float co2Avg = co2Sum/LOG_CNT;
+
+    // Log data
     logData(tmpAvg, humAvg, co2Avg, rtc.now());
 
+    // Update display
     if (loopCnt % (LCD_MULT*LOG_CNT) == 0) {
       lcd.clear();
       updateDisplay(tmpAvg, humAvg, co2Avg);
