@@ -21,9 +21,11 @@
 
 /*
  * The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning.
- * Setting HEATER_MULTI based off trial and error right now.
+ * Setting HEATER_MULTI based off trial and error right now to get the timing right.
+ * 
+ * Feather HUZZAH ESP8266:  19
  */
-#define HEATER_MULT 20
+#define HEATER_MULT 19
 
 #define DELAY 120 // Delay per loop, in ms
 #define MAXTEMP 90.0 // Set ref. Stamets
