@@ -23,7 +23,7 @@
  * The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning.
  * Setting HEATER_MULTI based off trial and error right now.
  */
-#define HEATER_MULT 25
+#define HEATER_MULT 20
 
 #define DELAY 120 // Delay per loop, in ms
 #define MAXTEMP 90.0 // Set ref. Stamets
