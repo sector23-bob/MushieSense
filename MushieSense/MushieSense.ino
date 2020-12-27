@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include <RTClib.h>
 #include <Wire.h>
+#include <FS.h>
+#include <LittleFS.h>
 
 // Colors
 #define RED 0x1
@@ -187,6 +189,16 @@ void setup() {
   // End SHT31
     
   /*** End sensors test ***/
+
+  /*** Set up LittleFS ***/
+  Serial.println();
+  Serial.println("Formatting LittleFS filesystem");
+  LittleFS.format();
+  Serial.println("Mount LittleFS");
+  if (! LittleFS.begin()) {
+    Serial.println("LittleFS mount failed");
+    return;
+  }
   
   time = millis() - time; // TODO - log this?
   Serial.print("Took "); Serial.print(time); Serial.println(" ms");
