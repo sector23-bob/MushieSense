@@ -20,7 +20,8 @@
 #define LCD_MULT 5 // Number of logging events before LCD update
 
 /*
- * The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning
+ * The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning.
+ * Setting HEATER_MULTI based off trial and error right now.
  */
 #define HEATER_MULT 25
 
@@ -239,7 +240,7 @@ void loop() {
     float co2Avg = co2Sum/LOG_CNT;
     logData(tmpAvg, humAvg, co2Avg, rtc.now());
 
-    if (loopCnt % LCD_MULT*LOG_CNT == 0) {
+    if (loopCnt % (LCD_MULT*LOG_CNT) == 0) {
       lcd.clear();
       updateDisplay(tmpAvg, humAvg, co2Avg);
     }
@@ -249,7 +250,7 @@ void loop() {
     memset(humVals, 0.0, sizeof(humVals));
     memset(co2Vals, 0.0, sizeof(co2Vals));
   
-    if (loopCnt % HEATER_MULT*LOG_CNT == 0) {
+    if (loopCnt % (HEATER_MULT*LOG_CNT) == 0) {
       // Do that maintenance
       enableHeater = !enableHeater;
       sht31.heater(enableHeater);
