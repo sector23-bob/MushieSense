@@ -20,15 +20,6 @@
 // Not Colors
 #define LOG_CNT 20 // Number of loops to average values over before logging
 #define LCD_MULT 2 // Number of logging events before LCD update
-
-/*
- * The SHT31's heater should be toggled about every 30 seconds to ensure proper functioning.
- * Setting HEATER_MULTI based off trial and error right now to get the timing right.
- * 
- * Feather HUZZAH ESP8266:  19
- */
-#define HEATER_MULT 9
-
 #define DELAY 120 // Delay per loop, in ms
 #define MAXTEMP 90.0 // Set ref. Stamets
 #define MINTEMP 55.0  // Set ref. Stamets
@@ -46,11 +37,14 @@ Adafruit_SHT31 sht31 = Adafruit_SHT31();
 // Enable/disable heater on SHT31
 bool enableHeater = false;
 
+// "Alarm" for heater on/off
+DateTime heaterToggle;
+
 // Real-time clock
 RTC_PCF8523 rtc;
 
 // Loop counter
-uint16_t loopCnt = 0;
+uint8_t loopCnt = 0;
 
 // Arrays for sensor readings
 float tmpVals[LOG_CNT];
@@ -238,10 +232,13 @@ void setup() {
   }
 
   Serial.print("Heater Enabled State: ");
-  if (sht31.isHeaterEnabled())
+  if (sht31.isHeaterEnabled()) {
     Serial.println("ENABLED");
-  else
+  }
+  else {
     Serial.println("DISABLED");
+  }
+  heaterToggle = rtc.now() + TimeSpan(0, 0, 0, 30);
   // End SHT31
     
   /*** End sensors test ***/
@@ -294,6 +291,22 @@ void loop() {
   freakOut(t, h, c);
 
   /*** Do some housekeeping - maintenance, logging, and output - once the loop count thresholds are reached ***/
+  // Maintenance
+  // The heater should toggle every 30 seconds
+  if (rtc.now() > heaterToggle) {
+    enableHeater = ! enableHeater;
+    sht31.heater(enableHeater);
+    Serial.print("Heater Enabled State: ");
+    if (sht31.isHeaterEnabled()) {
+      Serial.println("ENABLED");
+    }
+    else {
+      Serial.println("DISABLED");
+    }
+    heaterToggle = heaterToggle + TimeSpan(0, 0, 0, 30);
+  }
+
+  // Logging and output
   if (++loopCnt % LOG_CNT == 0) {
     // Get averages
     float tmpSum = 0.0;
@@ -312,32 +325,19 @@ void loop() {
     // Log data
     logData(tmpAvg, humAvg, co2Avg, rtc.now());
 
-    // Update display
+    // Update display, reset loop if we're getting too big
     if (loopCnt % (LCD_MULT*LOG_CNT) == 0) {
       lcd.clear();
       updateDisplay(tmpAvg, humAvg, co2Avg);
+      if (loopCnt > 200) {
+        loopCnt = 0;
+      }
     }
 
-    // Reset sensor arrays
+    // Re-zero sensor read arrays
     memset(tmpVals, 0.0, sizeof(tmpVals));
     memset(humVals, 0.0, sizeof(humVals));
     memset(co2Vals, 0.0, sizeof(co2Vals));
-  
-    if (loopCnt % (HEATER_MULT*LOG_CNT) == 0) {
-      // Do that maintenance
-      enableHeater = ! enableHeater;
-      sht31.heater(enableHeater);
-      Serial.print("Heater Enabled State: ");
-      if (sht31.isHeaterEnabled()) {
-        Serial.println("ENABLED");
-      }
-      else {
-        Serial.println("DISABLED");
-      }
-
-      // Reset loop
-      loopCnt = 0;
-    }
   }
   /*** End housekeeping ***/
   
