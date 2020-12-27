@@ -177,17 +177,17 @@ void logData(float t, float h, float c, DateTime now) {
   @param message Message to be written
  */
 void writeToLittleFSLog(const char * message, DateTime now) {
-  char buf[32] = "YYYYMMDD-hh";
+  char buf[] = "YYYYMMDD-hh";
   char * date = now.toString(buf);
   char fname[64];
   sprintf(fname, "/%s.log", date);
   if (! LittleFS.exists(fname)) {
-    Serial.print("Created file: "); Serial.println(fname);
+    Serial.printf("Created file: %s\n", fname);
     writeFile(fname, (now.timestamp() + " | Begin log\n").c_str());
   }
   appendFile(fname, message);
   appendFile(fname, "\n");
-
+  
   File file = LittleFS.open(fname, "r");
   Serial.printf("File size: %d\n", file.size());
 }
@@ -222,7 +222,7 @@ void setup() {
     Serial.println("RTC is not initialized, setting...");
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }  
-  rtc.adjust(DateTime(2000, 1, 1, 8, 59, 30)); // Testing datetime
+  //rtc.adjust(DateTime(2000, 1, 1, 8, 59, 30)); // Testing datetime
   rtc.start();
   //int offset = 0; // There's a whole thing about this, I don't know that it's super important
   //rtc.calibrate(PCF8523_TwoHours, offset);
@@ -257,7 +257,7 @@ void setup() {
   }
   
   time = millis() - time; // TODO - log this?
-  Serial.print("Took "); Serial.print(time); Serial.println(" ms");
+  Serial.printf("Took %d ms\n", time);
 
   lcd.setBacklight(WHITE);
 }
