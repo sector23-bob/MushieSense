@@ -226,8 +226,14 @@ void setup() {
 
   /*** Fan ***/
   pinMode(FAN_PIN, OUTPUT);
-  fanOnAlarm = starTime + FAN_DELAY;
-  fanOffAlarm = null;
+  // Manual reset
+  digitalWrite(FAN_PIN, LOW);
+  delay(10);
+  digitalWrite(FAN_PIN, HIGH);
+  delay(10);
+  digitalWrite(FAN_PIN, LOW);
+  fanOnAlarm = startTime + FAN_DELAY;
+  fanOffAlarm = startTime;
   
   /*** Set up LoRa 
   // manual reset
@@ -290,13 +296,6 @@ void loop() {
     enableHeater = ! enableHeater;
     sht31.heater(enableHeater);
     heaterAlarm = heaterAlarm + HEATER_DELAY;
-
-    if (enableFan) {
-      digitalWrite(FAN_PIN, HIGH);
-    } else {
-      digitalWrite(FAN_PIN, LOW);
-    }
-    enableFan = ! enableFan;
   }
   
   // Fan
@@ -310,7 +309,7 @@ void loop() {
 
   if (enableFan and (loopTime > fanOffAlarm)) {
     Serial.println("Disabling fan");
-    digitalWrite(FAN_PIN, LOW)
+    digitalWrite(FAN_PIN, LOW);
     enableFan = false;
   }
   /*** End maintenance ***/
