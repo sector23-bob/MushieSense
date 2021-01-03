@@ -55,11 +55,11 @@ bool enableHeater = false;
 // Enable/disable fan on GIO2
 bool enableFan = false;
 
-// "Alarm" for heater on/off
-DateTime heaterAlarm;
-
-// "Alarm" for writing to SD card
-DateTime logAlarm;
+// Alarms
+DateTime fanOnAlarm;    // Turn on fan
+DateTime fanOffAlarm;   // Turn off fan
+DateTime heaterAlarm;   // Toggle heater on/off
+DateTime logAlarm;      // Writing to SD card
 
 // SD card pin
 const int sdcardPin = 15;
@@ -226,6 +226,8 @@ void setup() {
 
   /*** Fan ***/
   pinMode(FAN_PIN, OUTPUT);
+  fanOnAlarm = starTime + FAN_DELAY;
+  fanOffAlarm = null;
   
   /*** Set up LoRa 
   // manual reset
@@ -296,8 +298,23 @@ void loop() {
     }
     enableFan = ! enableFan;
   }
-  /*** End maintenance ***/
   
+  // Fan
+  if (! enableFan and (loopTime > fanOnAlarm)) {
+    Serial.println("Enabling fan");
+    digitalWrite(FAN_PIN, HIGH);
+    enableFan = true;
+    fanOffAlarm = fanOnAlarm + FAN_ON_TIME;
+    fanOnAlarm = fanOnAlarm + FAN_DELAY;
+  }
+
+  if (enableFan and (loopTime > fanOffAlarm)) {
+    Serial.println("Disabling fan");
+    digitalWrite(FAN_PIN, LOW)
+    enableFan = false;
+  }
+  /*** End maintenance ***/
+
   /*** Logging ***/
   if (loopTime > logAlarm) {
     writeToLog(logString.c_str(), loopTime);
