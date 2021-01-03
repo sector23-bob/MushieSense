@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 #include <FS.h>
-#include <RH_RF95.h>
 #include <RTClib.h>
 #include <SD.h>
 #include <SPI.h>
@@ -32,7 +31,7 @@
 #define MAXCO2  0.0     // TODO - set this ref. Stamets
 #define MINCO2  0.0     // TODO - set this ref. Stamets
 
-// RFM9x module stuff
+// RFM9x module stuff TODO
 #define RFM95_CS    2     // "E" pin for RFM9x
 #define RFM95_RST   16    // "D" pin for RFM9x
 #define RFM95_INT   15    // "B" pin for RFM9x
@@ -41,9 +40,6 @@
 
 // Temp/humidity sensor
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
-
-// LoRa radio module - FeatherWing RFM9x
-RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
 // Real-time clock
 RTC_PCF8523 rtc;
@@ -81,7 +77,7 @@ void freakOut(float t, float h, float c) {
     bool tmpExceed = (t > MAXTEMP) or (t < MINTEMP);
     bool humExceed = (h > MAXHUM) or (h < MINHUM);
     bool co2Exceed = false; //(c > MAXCO2) or (c < MINCO2); // TODO
-    // Do something
+    // Do something?
 }
 
 /*!
@@ -92,8 +88,36 @@ void handleSensorError() {
 }
 
 /*!
+  @brief Perform logging actions for recorded values
+  @param loopTime Timestamp from the loop calling this log event
+ */
+void doLogging(DateTime loopTime) {
+  // Get averages
+  float tmpSum = 0.0;
+  float humSum = 0.0;
+  float co2Sum = 0.0;
+
+  for (int i = 0; i < LOG_CNT; i++) {
+    tmpSum += tmpVals[i];
+    humSum += humVals[i];
+    co2Sum += co2Vals[i];
+  }
+  float tmpAvg = tmpSum/LOG_CNT;
+  float humAvg = humSum/LOG_CNT;
+  float co2Avg = co2Sum/LOG_CNT;
+
+  // Add data to log string
+  char message[1024];
+  sprintf(message, "%s | %f | %f | %f ", loopTime.timestamp().c_str(), tmpAvg, humAvg, co2Avg);
+  logString += String(message) + "\n";
+
+  // Send LoRa message via RFM9x TODO
+}
+
+/*!
   @brief Write to a log file in memory using LittleFS
   @param message Message to be written
+  @param loopTime Timestamp from the loop calling this log event
  */
 void writeToLog(const char * message, DateTime loopTime) {
   char buf[] = "YYYYMMDD-hh";
@@ -121,23 +145,6 @@ void writeToLog(const char * message, DateTime loopTime) {
     logFile.close();
   } else {
     Serial.print("Couldn't log to file: "); Serial.println(fname);
-  }
-}
-
-void displayLog(DateTime now) {
-  char buf[] = "YYYYMMDD-hh";
-  char * date = now.toString(buf);
-  char fname[64];
-  sprintf(fname, "/%s.log", date);
-
-  File logFile = SD.open(fname);
-  if (logFile) {
-    while (logFile.available()) {
-      Serial.write(logFile.read());
-    }
-    logFile.close();
-  } else {
-    Serial.print("Couldn't find log file: "); Serial.println(fname);
   }
 }
 
@@ -264,15 +271,16 @@ void loop() {
   freakOut(t, h, c);
 
   /*** Do some housekeeping - maintenance, logging, and output - once the loop count thresholds are reached ***/
-  // Maintenance
-  // The heater should toggle every 30 seconds
+  /*** Maintenance ***/
+  // Toggle heater
   if (loopTime > heaterAlarm) {
     enableHeater = ! enableHeater;
     sht31.heater(enableHeater);
     heaterAlarm = heaterAlarm + HEATER_DELAY;
   }
-
-  // Logging
+  /*** End maintenance ***/
+  
+  /*** Logging ***/
   if (loopTime > logAlarm) {
     writeToLog(logString.c_str(), loopTime);
     logAlarm = logAlarm + WRITE_DELAY;
@@ -280,29 +288,11 @@ void loop() {
   }
   
   if (++loopCnt % LOG_CNT == 0) {
-    // Get averages
-    float tmpSum = 0.0;
-    float humSum = 0.0;
-    float co2Sum = 0.0;
-
-    for (int i = 0; i < LOG_CNT; i++) {
-      tmpSum += tmpVals[i];
-      humSum += humVals[i];
-      co2Sum += co2Vals[i];
-    }
-    float tmpAvg = tmpSum/LOG_CNT;
-    float humAvg = humSum/LOG_CNT;
-    float co2Avg = co2Sum/LOG_CNT;
-
-    // Add data to log string
-    char message[1024];
-    sprintf(message, "%s | %f | %f | %f ", loopTime.timestamp().c_str(), tmpAvg, humAvg, co2Avg);
-    logString += String(message) + "\n";
-
-    // Send LoRa message via RFM9x
+    doLogging(loopTime);
 
     if (loopCnt > 200) {
       loopCnt = 0;
+      Serial.printf("%s | %f | %f | %f\n", loopTime.timestamp().c_str(), t, h, c);
     }
 
     // Re-zero sensor read arrays
@@ -310,6 +300,7 @@ void loop() {
     memset(humVals, 0.0, sizeof(humVals));
     memset(co2Vals, 0.0, sizeof(co2Vals));
   }
+  /*** End logging ***/
   /*** End housekeeping ***/
   
   delay(DELAY);
