@@ -232,8 +232,8 @@ void setup() {
   digitalWrite(FAN_PIN, HIGH);
   delay(10);
   digitalWrite(FAN_PIN, LOW);
-  fanOnAlarm = startTime + FAN_DELAY;
-  fanOffAlarm = startTime;
+  fanOnAlarm = startTime;
+  fanOffAlarm = startTime + FAN_ON_TIME;
   
   /*** Set up LoRa 
   // manual reset
