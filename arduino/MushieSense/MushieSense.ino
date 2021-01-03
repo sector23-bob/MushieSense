@@ -22,6 +22,8 @@
 #define DELAY   120   // Delay per loop, in ms
 #define HEATER_DELAY  TimeSpan(0, 0, 0, 30)   // Delay between heater cycle
 #define WRITE_DELAY   TimeSpan(0, 0, 5, 0)    // Time between disk writes
+#define FAN_DELAY     TimeSpan(0, 0, 15, 0)   // Time between fan activation
+#define FAN_ON_TIME   TimeSpan(0, 0, 5, 0)    // How long the fan is on for
 
 // Climate control limits
 #define MAXTEMP 90.0    // Set ref. Stamets
@@ -38,6 +40,9 @@
 #define RFM95_FREQ  915.0 // Frequency for radio
 #define MAX_MSG     252   // Maximum message size in bytes     
 
+// Pin for fan control TODO
+#define FAN_PIN   2   // We'll control the fan with GPIO2
+
 // Temp/humidity sensor
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
@@ -46,6 +51,9 @@ RTC_PCF8523 rtc;
 
 // Enable/disable heater on SHT31
 bool enableHeater = false;
+
+// Enable/disable fan on GIO2
+bool enableFan = false;
 
 // "Alarm" for heater on/off
 DateTime heaterAlarm;
@@ -216,6 +224,9 @@ void setup() {
   // End SHT31
   /*** End sensors test ***/
 
+  /*** Fan ***/
+  pinMode(FAN_PIN, OUTPUT);
+  
   /*** Set up LoRa 
   // manual reset
   digitalWrite(RFM95_RST, LOW);
@@ -277,6 +288,13 @@ void loop() {
     enableHeater = ! enableHeater;
     sht31.heater(enableHeater);
     heaterAlarm = heaterAlarm + HEATER_DELAY;
+
+    if (enableFan) {
+      digitalWrite(FAN_PIN, HIGH);
+    } else {
+      digitalWrite(FAN_PIN, LOW);
+    }
+    enableFan = ! enableFan;
   }
   /*** End maintenance ***/
   
