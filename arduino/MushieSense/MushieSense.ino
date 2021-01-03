@@ -230,7 +230,7 @@ void setup() {
   digitalWrite(FAN_PIN, LOW);
   delay(10);
   digitalWrite(FAN_PIN, HIGH);
-  delay(10);
+  delay(500);
   digitalWrite(FAN_PIN, LOW);
   fanOnAlarm = startTime;
   fanOffAlarm = startTime + FAN_ON_TIME;
@@ -252,7 +252,7 @@ void setup() {
   
   logAlarm = startTime + WRITE_DELAY;
 
-  time = millis() - time; // TODO - log this?
+  time = millis() - time;
   Serial.printf("Setup took %d ms\n", time);
   Serial.flush();
 }
