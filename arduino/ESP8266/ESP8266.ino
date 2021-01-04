@@ -160,7 +160,7 @@ void writeToLog(const char * message, DateTime loopTime) {
       newFile.close();
     } else {
       // Throw some kind of error?
-      Serial.print("Couldn't open log file: "); Serial.println(fname);
+      Serial.print("Couldn't open new log file: "); Serial.println(fname);
     }
   } else {
     Serial.print("Logging to file: "); Serial.println(fname);
@@ -175,7 +175,7 @@ void writeToLog(const char * message, DateTime loopTime) {
   }
 }
 
-void ICACHE_RAM_ATTR setup() {
+void setup() {
   Serial.begin(115200);
   while (! Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
