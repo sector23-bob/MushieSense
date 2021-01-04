@@ -128,7 +128,17 @@ void doLogging(DateTime loopTime) {
   sprintf(message, "%s | %f | %f | %f ", loopTime.timestamp().c_str(), tmpAvg, humAvg, co2Avg);
   logString += String(message) + "\n";
 
-  // Send LoRa message via RFM9x TODO
+  // Send LoRa message via RFM9x
+  txLoRa(message);
+}
+
+/*!
+  @brief Send a message using the 
+  @param message
+ */
+void txLoRa(char * message) {
+  rf95.send((uint8_t*) message, sizeof(message));
+  rf95.waitPacketSent();
 }
 
 /*!
