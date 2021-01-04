@@ -37,7 +37,7 @@
 #define MAXCO2  0.0     // TODO - set this ref. Stamets
 #define MINCO2  0.0     // TODO - set this ref. Stamets
 
-// RFM9x module stuff TODO
+// RFM9x module stuff
 #if defined(ESP8266)
   #define RFM95_CS    2     // "E" pin for RFM9x
   #define RFM95_RST   16    // "D" pin for RFM9x
