@@ -9,13 +9,13 @@
 #include <Wire.h>
 
 // Colors
-#define RED 0x1
-#define YELLOW 0x3
-#define GREEN 0x2
-#define TEAL 0x6
-#define BLUE 0x4
-#define VIOLET 0x5
-#define WHITE 0x7
+#define RED     0x1
+#define YELLOW  0x3
+#define GREEN   0x2
+#define TEAL    0x6
+#define BLUE    0x4
+#define VIOLET  0x5
+#define WHITE   0x7
 
 // Not Colors
 // Control values
@@ -45,7 +45,7 @@
 #define MAX_MSG     252   // Maximum message size in bytes     
 
 // Pin for fan control
-#define FAN_PIN 2         // We'll control the fan with digital pin 2
+#define FAN_PIN   2   // We'll control the fan with digital pin 2
 
 // Temp/humidity sensor
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
@@ -156,7 +156,7 @@ void txLoRa(const char* message) {
  */
 char* getLogFnameFromDate(DateTime dt) {
   char buf[] = "YYYYMMDD-hh";
-  char* date = loopTime.toString(buf);
+  char* date = dt.toString(buf);
   char* fname = new char[64];
   sprintf(fname, "/%s.log", date);
   return fname;
@@ -167,7 +167,7 @@ char* getLogFnameFromDate(DateTime dt) {
   @param message Message to be written
   @param loopTime Timestamp from the loop calling this log event
  */
-void writeLogToFile(const char* message, DateTime loopTime) {
+void writeToLogFile(const char* message, DateTime loopTime) {
   char* fname = getLogFnameFromDate(loopTime);
   
   if (! SD.exists(fname)) {
@@ -299,7 +299,7 @@ void setup() {
   
   /*** End LoRa setup ***/
 
-  writeToLog("Setup finished!", rtc.now());
+  writeToLogFile("Setup finished!", rtc.now());
   logAlarm = startTime + WRITE_DELAY;
 
   time = millis() - time;
