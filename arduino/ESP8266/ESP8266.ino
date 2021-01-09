@@ -38,11 +38,9 @@
 #define MINCO2  0.0     // TODO - set this ref. Stamets
 
 // RFM9x module stuff
-#if defined(ESP8266)
-  #define RFM95_CS    2     // "E" pin for RFM9x
-  #define RFM95_RST   16    // "D" pin for RFM9x
-  #define RFM95_INT   15    // "B" pin for RFM9x
-#endif
+#define RFM95_CS    2     // "E" pin for RFM9x
+#define RFM95_RST   16    // "D" pin for RFM9x
+#define RFM95_INT   15    // "B" pin for RFM9x
 #define RFM95_FREQ  915.0 // Frequency for radio
 #define MAX_MSG     252   // Maximum message size in bytes     
 
@@ -86,14 +84,14 @@ float co2Vals[LOG_CNT];
 
 /*!
   @brief Do something if calculated values exceed defined parameters TODO
-  @param tmpAvg Average temperature calculated
-  @param humAvg Average humidity calculated
-  @param co2Avg Average CO2 calculated TODO
+  @param tmp Temperature to check vs. MAXTEMP, MINTEMP
+  @param hum Humidity% to check vs. MAXHUM, MINHUM
+  @param co2 CO2 ppm to check vs. MAXCO2, MINCO2
  */
-void freakOut(float t, float h, float c) {
-    bool tmpExceed = (t > MAXTEMP) or (t < MINTEMP);
-    bool humExceed = (h > MAXHUM) or (h < MINHUM);
-    bool co2Exceed = false; //(c > MAXCO2) or (c < MINCO2); // TODO
+void freakOut(float tmp, float hum, float co2) {
+    bool tmpExceed = (tmp > MAXTEMP) or (tmp < MINTEMP);
+    bool humExceed = (hum > MAXHUM) or (hum < MINHUM);
+    bool co2Exceed = false; //(co2 > MAXCO2) or (co2 < MINCO2); // TODO
     // Do something?
 }
 
@@ -105,11 +103,11 @@ void handleSensorError() {
 }
 
 /*!
-  @brief Perform logging actions for recorded values
-  @param loopTime Timestamp from the loop calling this log event
+  @brief Average sccumulated sensor values, perform logging actions
+  @param loopTime Time to record for logging
  */
 void doLogging(DateTime loopTime) {
-  // Get averages
+  /*** Get averages ***/
   float tmpSum = 0.0;
   float humSum = 0.0;
   float co2Sum = 0.0;
@@ -122,41 +120,61 @@ void doLogging(DateTime loopTime) {
   float tmpAvg = tmpSum/LOG_CNT;
   float humAvg = humSum/LOG_CNT;
   float co2Avg = co2Sum/LOG_CNT;
+  /*** End averages ***/
 
-  // Add data to log string
-  char message[1024];
-  sprintf(message, "%s | %f | %f | %f ", loopTime.timestamp().c_str(), tmpAvg, humAvg, co2Avg);
+  /*** Perform logging actions ***/
+  // Create log string for these values
+  char* message = createLogString(tmpAvg, humAvg, co2Avg, loopTime);
+
+  // Add to existing log string
   logString += String(message) + "\n";
 
   // Send LoRa message via RFM9x
   txLoRa(message);
+  /*** End logging actions ***/
+}
+
+char* createLogString(float tmp, float hum, float co2, DateTime dt) {
+  char message[1024];
+  sprintf(message, "%s | %f | %f | %f ", dt.timestamp().c_str(), tmp, hum, co2);
+  return message;
 }
 
 /*!
-  @brief Send a message using the 
-  @param message
+  @brief Send a message using the LoRa radio
+  @param message Message to be sent
+  TODO: Check message length in bytes < MAX_MSG
  */
-void txLoRa(char * message) {
+void txLoRa(const char* message) {
   rf95.send((uint8_t*) message, sizeof(message));
   rf95.waitPacketSent();
 }
 
 /*!
-  @brief Write to a log file in memory using LittleFS
+  @brief Generate our log file name based on the time
+  @param dt Time for the filename to be based on
+ */
+char* getLogFnameFromDate(DateTime dt) {
+  char buf[] = "YYYYMMDD-hh";
+  char* date = loopTime.toString(buf);
+  char* fname = new char[64];
+  sprintf(fname, "/%s.log", date);
+  return fname;
+}
+
+/*!
+  @brief Write message to a log file on the SD, based on logging event time
   @param message Message to be written
   @param loopTime Timestamp from the loop calling this log event
  */
-void writeToLog(const char * message, DateTime loopTime) {
-  char buf[] = "YYYYMMDD-hh";
-  char * date = loopTime.toString(buf);
-  char fname[64];
-  sprintf(fname, "/%s.log", date);
-
+void writeLogToFile(const char* message, DateTime loopTime) {
+  char* fname = getLogFnameFromDate(loopTime);
+  
   if (! SD.exists(fname)) {
     File newFile = SD.open(fname, FILE_WRITE);
     if (newFile) {
       Serial.print("Opened new log file: "); Serial.println(fname);
-      newFile.print(loopTime.timestamp()); newFile.println(" | Begin log");
+      newFile.print(loopTime.timestamp().c_str()); newFile.println(" | Begin log");
       newFile.close();
     } else {
       // Throw some kind of error?
@@ -191,8 +209,8 @@ void setup() {
     abort();
   }
 
-  //if (! rtc.initialized() || rtc.lostPower()) {
-  if (true) {
+  if (! rtc.initialized() || rtc.lostPower()) {
+  //if (true) {
     Serial.println("RTC is not initialized, setting...");
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
   }  
@@ -280,7 +298,8 @@ void setup() {
   Serial.print("Set Freq to: "); Serial.println(RFM95_FREQ);
   
   /*** End LoRa setup ***/
-  
+
+  writeToLog("Setup finished!", rtc.now());
   logAlarm = startTime + WRITE_DELAY;
 
   time = millis() - time;
@@ -347,7 +366,7 @@ void loop() {
 
   /*** Logging ***/
   if (loopTime > logAlarm) {
-    writeToLog(logString.c_str(), loopTime);
+    writeToLogFile(logString.c_str(), loopTime);
     logAlarm = logAlarm + WRITE_DELAY;
     logString = "";
   }
