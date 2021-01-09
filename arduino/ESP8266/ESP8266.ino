@@ -27,7 +27,7 @@
 #define HEATER_DELAY  TimeSpan(0, 0, 0, 30)   // Delay between heater cycle
 #define WRITE_DELAY   TimeSpan(0, 0, 5, 0)    // Time between disk writes
 #define FAN_DELAY     TimeSpan(0, 0, 15, 0)   // Time between fan activation
-#define FAN_ON_TIME   TimeSpan(0, 0, 5, 0)    // How long the fan is on for
+#define FAN_DURATION  TimeSpan(0, 0, 5, 0)    // How long the fan is on for
 
 // Climate control limits
 #define MAXTEMP 90.0    // Set ref. Stamets
@@ -261,7 +261,7 @@ void setup() {
   // End SHT31
   /*** End sensors test ***/
 
-  /*** Fan ***/
+  /*** Set up fan control ***/
   pinMode(FAN_PIN, OUTPUT);
   // Manual reset and test
   digitalWrite(FAN_PIN, LOW);
@@ -270,12 +270,12 @@ void setup() {
   delay(500);
   digitalWrite(FAN_PIN, LOW);
   fanOnAlarm = startTime;
-  fanOffAlarm = startTime + FAN_ON_TIME;
+  fanOffAlarm = startTime + FAN_DURATION;
   Serial.println("Fan OK");
   
   /*** Set up LoRa ***/
-  // manual reset
   pinMode(RFM95_RST, OUTPUT);
+  // Manual reset and test
   digitalWrite(RFM95_RST, HIGH);
   delay(100);
   digitalWrite(RFM95_RST, LOW);
@@ -284,19 +284,18 @@ void setup() {
   delay(10);
 
   Serial.println("Trying to init radio");
-  while (!rf95.init()) {
+  while (! rf95.init()) {
     Serial.println("LoRa radio init failed");
     Serial.println("Uncomment '#define SERIAL_DEBUG' in RH_RF95.cpp for detailed debug info");
     while (1);
   }
   Serial.println("LoRa radio init OK!");
 
-  if (!rf95.setFrequency(RFM95_FREQ)) {
+  if (! rf95.setFrequency(RFM95_FREQ)) {
     Serial.println("setFrequency failed");
     while (1);
   }
   Serial.print("Set Freq to: "); Serial.println(RFM95_FREQ);
-  
   /*** End LoRa setup ***/
 
   writeToLogFile("Setup finished!", rtc.now());
@@ -339,9 +338,9 @@ void loop() {
   // Do we need to freak out?
   freakOut(t, h, c);
 
-  /*** Do some housekeeping - maintenance, logging, and output - once the loop count thresholds are reached ***/
+  /*** Do some housekeeping - maintenance, logging, and output once the loop count thresholds are reached ***/
   /*** Maintenance ***/
-  // Toggle heater
+  // Heater
   if (loopTime > heaterAlarm) {
     enableHeater = ! enableHeater;
     sht31.heater(enableHeater);
@@ -349,18 +348,20 @@ void loop() {
   }
   
   // Fan
-  if (! enableFan and (loopTime > fanOnAlarm)) {
-    Serial.println("Enabling fan");
-    digitalWrite(FAN_PIN, HIGH);
-    enableFan = true;
-    fanOffAlarm = fanOnAlarm + FAN_ON_TIME;
-    fanOnAlarm = fanOnAlarm + FAN_DELAY;
-  }
-
-  if (enableFan and (loopTime > fanOffAlarm)) {
-    Serial.println("Disabling fan");
-    digitalWrite(FAN_PIN, LOW);
-    enableFan = false;
+  if (! enableFan) {
+    if (loopTime > fanOnAlarm) {
+      Serial.println("Enabling fan");
+      digitalWrite(FAN_PIN, HIGH);
+      enableFan = true;
+      fanOffAlarm = fanOnAlarm + FAN_DURATION;
+      fanOnAlarm = fanOnAlarm + FAN_DELAY;
+    }
+  } else { //enableFan is true
+    if (loopTime > fanOffAlarm) {
+      Serial.println("Disabling fan");
+      digitalWrite(FAN_PIN, LOW);
+      enableFan = false;
+    }
   }
   /*** End maintenance ***/
 
