@@ -120,6 +120,11 @@ void doLogging(DateTime loopTime) {
   float tmpAvg = tmpSum/LOG_CNT;
   float humAvg = humSum/LOG_CNT;
   float co2Avg = co2Sum/LOG_CNT;
+
+  // Re-zero sensor read arrays
+  memset(tmpVals, 0.0, sizeof(tmpVals));
+  memset(humVals, 0.0, sizeof(humVals));
+  memset(co2Vals, 0.0, sizeof(co2Vals));
   /*** End averages ***/
 
   /*** Perform logging actions ***/
@@ -379,11 +384,6 @@ void loop() {
       loopCnt = 0;
       Serial.printf("%s | %f | %f | %f\n", loopTime.timestamp().c_str(), t, h, c);
     }
-
-    // Re-zero sensor read arrays
-    memset(tmpVals, 0.0, sizeof(tmpVals));
-    memset(humVals, 0.0, sizeof(humVals));
-    memset(co2Vals, 0.0, sizeof(co2Vals));
   }
   /*** End logging ***/
   /*** End housekeeping ***/
