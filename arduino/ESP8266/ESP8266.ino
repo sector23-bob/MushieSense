@@ -1,10 +1,8 @@
 #include "Adafruit_SHT31.h"
 
 #include <Arduino.h>
-#include <FS.h>
 #include <RH_RF95.h>
 #include <RTClib.h>
-#include <SD.h>
 #include <SPI.h>
 #include <Wire.h>
 
@@ -68,14 +66,8 @@ DateTime fanOffAlarm;   // Turn off fan
 DateTime heaterAlarm;   // Toggle heater on/off
 DateTime logAlarm;      // Writing to SD card
 
-// SD card pin
-const int sdcardPin = 15;
-
 // Loop counter
 uint8_t loopCnt = 0;
-
-// Log string
-String logString;
 
 // Arrays for sensor readings
 float tmpVals[LOG_CNT];
@@ -131,9 +123,6 @@ void doLogging(DateTime loopTime) {
   // Create log string for these values
   char* message = createLogString(tmpAvg, humAvg, co2Avg, loopTime);
 
-  // Add to existing log string
-  logString += String(message) + "\n";
-
   // Send LoRa message via RFM9x
   txLoRa(message);
   /*** End logging actions ***/
@@ -167,37 +156,6 @@ char* getLogFnameFromDate(DateTime dt) {
   char* fname = new char[64];
   sprintf(fname, "/%s.log", date);
   return fname;
-}
-
-/*!
-  @brief Write message to a log file on the SD, based on logging event time
-  @param message Message to be written
-  @param loopTime Timestamp from the loop calling this log event
- */
-void writeToLogFile(const char* message, DateTime loopTime) {
-  char* fname = getLogFnameFromDate(loopTime);
-  
-  if (! SD.exists(fname)) {
-    File newFile = SD.open(fname, FILE_WRITE);
-    if (newFile) {
-      Serial.print("Opened new log file: "); Serial.println(fname);
-      newFile.print(loopTime.timestamp().c_str()); newFile.println(" | Begin log");
-      newFile.close();
-    } else {
-      // Throw some kind of error?
-      Serial.print("Couldn't open new log file: "); Serial.println(fname);
-    }
-  } else {
-    Serial.print("Logging to file: "); Serial.println(fname);
-  }
-
-  File logFile = SD.open(fname, FILE_WRITE);
-  if (logFile) {
-    logFile.print(message);
-    logFile.close();
-  } else {
-    Serial.print("Couldn't log to file: "); Serial.println(fname);
-  }
 }
 
 void setup() {
@@ -235,19 +193,6 @@ void setup() {
   memset(tmpVals, 0.0, sizeof(tmpVals));
   memset(humVals, 0.0, sizeof(humVals));
   memset(co2Vals, 0.0, sizeof(co2Vals));
-  logString = "";
-  
-  /*** Set up SD card ***/
-  Serial.print("Initializing SD card...");
-
-  // see if the card is present and can be initialized:
-  if (!SD.begin(sdcardPin)) {
-    Serial.println("Card failed, or not present");
-    // don't do anything more:
-    return;
-  }
-  Serial.println(" card initialized.");
-  /*** End SD card ***/
 
   /*** Test sensors ***/
   // SHT31
@@ -304,9 +249,6 @@ void setup() {
   }
   Serial.print("Set Freq to: "); Serial.println(RFM95_FREQ);
   /*** End LoRa setup ***/
-
-  writeToLogFile("Setup finished!", rtc.now());
-  logAlarm = startTime + WRITE_DELAY;
 
   time = millis() - time;
   Serial.printf("Setup took %d ms\n", time);
@@ -373,12 +315,6 @@ void loop() {
   /*** End maintenance ***/
 
   /*** Logging ***/
-  if (loopTime > logAlarm) {
-    writeToLogFile(logString.c_str(), loopTime);
-    logAlarm = logAlarm + WRITE_DELAY;
-    logString = "";
-  }
-  
   if (++loopCnt % LOG_CNT == 0) {
     doLogging(loopTime);
 
