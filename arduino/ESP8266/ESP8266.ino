@@ -133,7 +133,6 @@ void doLogging() {
 char* createLogString(float tmp, float hum, float co2) {
   char message[1024];
   sprintf(message, "%f | %f | %f | %s", tmp, hum, co2, uid);
-  Serial.println(uid);
   return message;
 }
 
@@ -145,7 +144,6 @@ char* createLogString(float tmp, float hum, float co2) {
 void txLoRa(const char* message) {
   rf95.send((uint8_t*) message, strlen(message));
   rf95.waitPacketSent();
-  Serial.println(message);
 }
 
 void setup() {
@@ -159,19 +157,12 @@ void setup() {
 
   uid = new char[UniqueIDsize*2];
   UniqueIDdump(Serial);
-  Serial.print("Serial Unique ID: ");
   for (size_t i = 0; i < UniqueIDsize; i++)
   {
-    if (UniqueID[i] < 0x10) {
-      Serial.print("0");
-    }
-    //Serial.print(UniqueID[i], HEX);
     uid[(i*2) + 0] = hex[((UniqueID[i] & 0xF0) >> 4)];
     uid[(i*2) + 1] = hex[((UniqueID[i] & 0x0F) >> 0)];
-    Serial.print(" ");
   }
-  Serial.println();
-  Serial.println(uid);
+  Serial.print("Unique ID: "); Serial.println(uid);
 
   /*** Initialize variables ***/
   memset(tmpVals, 0.0, sizeof(tmpVals));
