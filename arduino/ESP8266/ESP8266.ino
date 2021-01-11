@@ -1,8 +1,8 @@
 #include "Adafruit_SHT31.h"
 
 #include <Arduino.h>
+#include <ArduinoUniqueID.h>
 #include <RH_RF95.h>
-#include <RTClib.h>
 #include <SPI.h>
 #include <Wire.h>
 
@@ -17,15 +17,15 @@
 
 // Not Colors
 // Control values
-#define LOG_CNT 30    // Number of loops to average values over before logging
+#define LOG_CNT 30    // Number of loops to average values over
 #define DELAY   120   // Delay per loop, in ms
 #define FAN_PIN 2     // We'll use pin 2 to control the fan
 
-// Timing for various activities
-#define HEATER_DELAY  TimeSpan(0, 0, 0, 30)   // Delay between heater cycle
-#define WRITE_DELAY   TimeSpan(0, 0, 5, 0)    // Time between disk writes
-#define FAN_DELAY     TimeSpan(0, 0, 15, 0)   // Time between fan activation
-#define FAN_DURATION  TimeSpan(0, 0, 5, 0)    // How long the fan is on for
+#define HEATER_DELAY      30*1000       // Delay between heater cycle
+#define WRITE_DELAY       5*60*1000     // Time between disk writes
+#define FAN_DELAY         10*60*1000    // Time between fan activation
+#define FAN_DURATION      60*1000       // Duration for fan operation
+#define DISPLAY_DURATION  5*1000        // Display on time on button press
 
 // Climate control limits
 #define MAXTEMP 90.0    // Set ref. Stamets
@@ -45,14 +45,17 @@
 // Pin for fan control
 #define FAN_PIN   2   // We'll control the fan with digital pin 2
 
+// Unique ID
+char* uid;
+
+// Hex array
+static char hex[] = "0123456789ABCDEF";
+
 // Temp/humidity sensor
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
 // LoRa module RFM9x
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
-
-// Real-time clock
-RTC_PCF8523 rtc;
 
 // Enable/disable heater on SHT31
 bool enableHeater = false;
@@ -60,11 +63,10 @@ bool enableHeater = false;
 // Enable/disable fan on GIO2
 bool enableFan = false;
 
-// Alarms
-DateTime fanOnAlarm;    // Turn on fan
-DateTime fanOffAlarm;   // Turn off fan
-DateTime heaterAlarm;   // Toggle heater on/off
-DateTime logAlarm;      // Writing to SD card
+// Timing variables
+unsigned long loopTime;
+unsigned long heaterLastToggled;
+unsigned long fanLastOn;
 
 // Loop counter
 uint8_t loopCnt = 0;
@@ -98,7 +100,7 @@ void handleSensorError() {
   @brief Average sccumulated sensor values, perform logging actions
   @param loopTime Time to record for logging
  */
-void doLogging(DateTime loopTime) {
+void doLogging() {
   /*** Get averages ***/
   float tmpSum = 0.0;
   float humSum = 0.0;
@@ -121,16 +123,17 @@ void doLogging(DateTime loopTime) {
 
   /*** Perform logging actions ***/
   // Create log string for these values
-  char* message = createLogString(tmpAvg, humAvg, co2Avg, loopTime);
+  char* message = createLogString(tmpAvg, humAvg, co2Avg);
 
   // Send LoRa message via RFM9x
   txLoRa(message);
   /*** End logging actions ***/
 }
 
-char* createLogString(float tmp, float hum, float co2, DateTime dt) {
+char* createLogString(float tmp, float hum, float co2) {
   char message[1024];
-  sprintf(message, "%s | %f | %f | %f ", dt.timestamp().c_str(), tmp, hum, co2);
+  sprintf(message, "%f | %f | %f | %s", tmp, hum, co2, uid);
+  Serial.println(uid);
   return message;
 }
 
@@ -140,22 +143,9 @@ char* createLogString(float tmp, float hum, float co2, DateTime dt) {
   TODO: Check message length in bytes < MAX_MSG
  */
 void txLoRa(const char* message) {
-  //rf95.send((uint8_t*) message, sizeof(message));
   rf95.send((uint8_t*) message, strlen(message));
   rf95.waitPacketSent();
   Serial.println(message);
-}
-
-/*!
-  @brief Generate our log file name based on the time
-  @param dt Time for the filename to be based on
- */
-char* getLogFnameFromDate(DateTime dt) {
-  char buf[] = "YYYYMMDD-hh";
-  char* date = dt.toString(buf);
-  char* fname = new char[64];
-  sprintf(fname, "/%s.log", date);
-  return fname;
 }
 
 void setup() {
@@ -165,29 +155,23 @@ void setup() {
   }
   
   Serial.println("Initializing...");
-  int time = millis();
+  loopTime = millis();
 
-  /*** Set up RTC ***/
-  if (! rtc.begin()) {
-    Serial.println("Couldn't find RTC");
-    Serial.flush();
-    abort();
+  uid = new char[UniqueIDsize*2];
+  UniqueIDdump(Serial);
+  Serial.print("Serial Unique ID: ");
+  for (size_t i = 0; i < UniqueIDsize; i++)
+  {
+    if (UniqueID[i] < 0x10) {
+      Serial.print("0");
+    }
+    //Serial.print(UniqueID[i], HEX);
+    uid[(i*2) + 0] = hex[((UniqueID[i] & 0xF0) >> 4)];
+    uid[(i*2) + 1] = hex[((UniqueID[i] & 0x0F) >> 0)];
+    Serial.print(" ");
   }
-
-  if (! rtc.initialized() || rtc.lostPower()) {
-  //if (true) {
-    Serial.println("RTC is not initialized, setting...");
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  }  
-
-  rtc.start();
-  //int offset = 0; // There's a whole thing about this, I don't know that it's super important
-  //rtc.calibrate(PCF8523_TwoHours, offset);
-  Serial.printf("RTC up at %s\n", rtc.now().timestamp().c_str());
-  /*** End RTC setup ***/
-
-  /*** Record start time for setup ***/
-  DateTime startTime = rtc.now();
+  Serial.println();
+  Serial.println(uid);
 
   /*** Initialize variables ***/
   memset(tmpVals, 0.0, sizeof(tmpVals));
@@ -209,7 +193,7 @@ void setup() {
   else {
     Serial.println("DISABLED");
   }
-  heaterAlarm = startTime + HEATER_DELAY;
+  heaterLastToggled = loopTime;
   // End SHT31
   /*** End sensors test ***/
 
@@ -221,8 +205,7 @@ void setup() {
   digitalWrite(FAN_PIN, HIGH);
   delay(500);
   digitalWrite(FAN_PIN, LOW);
-  fanOnAlarm = startTime;
-  fanOffAlarm = startTime + FAN_DURATION;
+  fanLastOn = loopTime;
   Serial.println("Fan OK");
   
   /*** Set up LoRa ***/
@@ -250,7 +233,7 @@ void setup() {
   Serial.print("Set Freq to: "); Serial.println(RFM95_FREQ);
   /*** End LoRa setup ***/
 
-  time = millis() - time;
+  int time = millis() - loopTime;
   Serial.printf("Setup took %d ms\n", time);
   Serial.flush();
 }
@@ -258,7 +241,7 @@ void setup() {
 
 void loop() {
   /*** Record start time for this loop ***/
-  DateTime loopTime = rtc.now();
+  loopTime = millis();
   
   /*** Read sensor vals ***/
   float t = sht31.readTemperature()*1.8 + 32.0; // Convert to F
@@ -290,23 +273,23 @@ void loop() {
   /*** Do some housekeeping - maintenance, logging, and output once the loop count thresholds are reached ***/
   /*** Maintenance ***/
   // Heater
-  if (loopTime > heaterAlarm) {
+  if (loopTime - heaterLastToggled >= HEATER_DELAY) {
+    Serial.println("Toggling heater");
     enableHeater = ! enableHeater;
     sht31.heater(enableHeater);
-    heaterAlarm = heaterAlarm + HEATER_DELAY;
+    heaterLastToggled = loopTime;
   }
   
   // Fan
   if (! enableFan) {
-    if (loopTime > fanOnAlarm) {
+    if (loopTime - fanLastOn >= FAN_DELAY) {
       Serial.println("Enabling fan");
       digitalWrite(FAN_PIN, HIGH);
       enableFan = true;
-      fanOffAlarm = fanOnAlarm + FAN_DURATION;
-      fanOnAlarm = fanOnAlarm + FAN_DELAY;
+      fanLastOn = loopTime;
     }
   } else { //enableFan is true
-    if (loopTime > fanOffAlarm) {
+    if (loopTime - fanLastOn >= FAN_DURATION) {
       Serial.println("Disabling fan");
       digitalWrite(FAN_PIN, LOW);
       enableFan = false;
@@ -316,11 +299,11 @@ void loop() {
 
   /*** Logging ***/
   if (++loopCnt % LOG_CNT == 0) {
-    doLogging(loopTime);
+    doLogging();
 
     if (loopCnt > 200) {
       loopCnt = 0;
-      //Serial.printf("%s | %f | %f | %f\n", loopTime.timestamp().c_str(), t, h, c);
+      //Serial.printf("%f | %f | %f\n", t, h, c);
     }
   }
   /*** End logging ***/
