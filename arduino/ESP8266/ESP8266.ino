@@ -151,8 +151,10 @@ char* createLogString(float tmp, float hum, float co2, DateTime dt) {
   TODO: Check message length in bytes < MAX_MSG
  */
 void txLoRa(const char* message) {
-  rf95.send((uint8_t*) message, sizeof(message));
+  //rf95.send((uint8_t*) message, sizeof(message));
+  rf95.send((uint8_t*) message, strlen(message));
   rf95.waitPacketSent();
+  Serial.println(message);
 }
 
 /*!
@@ -382,7 +384,7 @@ void loop() {
 
     if (loopCnt > 200) {
       loopCnt = 0;
-      Serial.printf("%s | %f | %f | %f\n", loopTime.timestamp().c_str(), t, h, c);
+      //Serial.printf("%s | %f | %f | %f\n", loopTime.timestamp().c_str(), t, h, c);
     }
   }
   /*** End logging ***/
