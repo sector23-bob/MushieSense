@@ -36,9 +36,15 @@
 #define MINCO2  0.0     // TODO - set this ref. Stamets
 
 // RFM9x module stuff
-#define RFM95_CS    2     // "E" pin for RFM9x
-#define RFM95_RST   16    // "D" pin for RFM9x
-#define RFM95_INT   15    // "B" pin for RFM9x
+#if defined(ESP8266)
+  #define RFM95_CS    2     // "E" pin for RFM9x
+  #define RFM95_RST   16    // "D" pin for RFM9x
+  #define RFM95_INT   15    // "B" pin for RFM9x
+#else
+  #define RFM95_CS    8   // On-board Feather M0 module
+  #define RFM95_RST   4   // On-board Feather M0 module
+  #define RFM95_INT   3   // On-board Feather M0 module
+#endif
 #define RFM95_FREQ  915.0 // Frequency for radio
 #define MAX_MSG     252   // Maximum message size in bytes     
 
@@ -133,6 +139,7 @@ void doLogging() {
 char* createLogString(float tmp, float hum, float co2) {
   char message[1024];
   sprintf(message, "%f | %f | %f | %s", tmp, hum, co2, uid);
+  Serial.println(message);
   return message;
 }
 
@@ -155,12 +162,13 @@ void setup() {
   Serial.println("Initializing...");
   loopTime = millis();
 
-  uid = new char[UniqueIDsize*2];
+  uid = new char[UniqueIDsize];
   UniqueIDdump(Serial);
   for (size_t i = 0; i < UniqueIDsize; i++)
   {
     uid[(i*2) + 0] = hex[((UniqueID[i] & 0xF0) >> 4)];
     uid[(i*2) + 1] = hex[((UniqueID[i] & 0x0F) >> 0)];
+    //uid[i] = hex[UniqueID[i]];
   }
   Serial.print("Unique ID: "); Serial.println(uid);
 
