@@ -1,10 +1,9 @@
-#include "Adafruit_SHT31.h"
-
 #include <Arduino.h>
 #include <ArduinoUniqueID.h>
 #include <RH_RF95.h>
 #include <SPI.h>
 #include <Wire.h>
+#include "Adafruit_SHT31.h"
 
 // Colors
 #define RED     0x1
@@ -49,7 +48,7 @@
 #define MAX_MSG     252   // Maximum message size in bytes     
 
 // Pin for fan control
-#define FAN_PIN   2   // We'll control the fan with digital pin 2
+#define FAN_PIN   5   // We'll control the fan with digital pin 2
 
 // Unique ID
 char* uid;
@@ -162,12 +161,12 @@ void setup() {
   Serial.println("Initializing...");
   loopTime = millis();
 
-  uid = new char[UniqueIDsize];
-  UniqueIDdump(Serial);
-  for (size_t i = 0; i < UniqueIDsize; i++)
+  uid = new char[16];
+  UniqueID8dump(Serial);
+  for (size_t i = 0; i < 8; i++)
   {
-    uid[(i*2) + 0] = hex[((UniqueID[i] & 0xF0) >> 4)];
-    uid[(i*2) + 1] = hex[((UniqueID[i] & 0x0F) >> 0)];
+    uid[(i*2) + 0] = hex[((UniqueID8[i] & 0xF0) >> 4)];
+    uid[(i*2) + 1] = hex[((UniqueID8[i] & 0x0F) >> 0)];
     //uid[i] = hex[UniqueID[i]];
   }
   Serial.print("Unique ID: "); Serial.println(uid);
