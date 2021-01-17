@@ -122,6 +122,17 @@ void handleSensorError() {
 }
 
 /*!
+  @brief Clear the OLED display and show the text passed in
+  @param text Text to be displayed
+ */
+void oledDisplay(String text) {
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.print(text);
+  display.display();
+}
+
+/*!
   @brief Average sccumulated sensor values, send them via LoRa with device ID
  */
 void doLogging() {
@@ -146,15 +157,14 @@ void doLogging() {
   
   /*** Send message ***/
   // Create log string for these values
-  static char* message = new char[MAX_MSG];
   String tmpStr = "TMP:" + String(tmpAvg) + ";HUM:" + String(humAvg);
   tmpStr += ";CO2:" + String(co2Avg) + ";ID:" + uid + '\0';
-  Serial.println(tmpStr);
-  tmpStr.toCharArray(message, tmpStr.length());
-  Serial.println(message);
+  oledDisplay(tmpStr);
 
   // Send LoRa message via RFM9x
-  rf95.send((uint8_t*) message, strlen(message)+1);
+  static char* message = new char[min(tmpStr.length(), MAX_MSG)];
+  tmpStr.toCharArray(message, tmpStr.length());
+  rf95.send((uint8_t*) message, strlen(message));
   rf95.waitPacketSent();
 }
 
@@ -231,7 +241,6 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
 
   // Clear the buffer.
-  display.clearDisplay();
   display.display();
 
   Serial.println("IO test");
@@ -241,14 +250,12 @@ void setup() {
   pinMode(BUTTON_C, INPUT_PULLUP);
 
   // text display tests
+  display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
-  display.print("Connecting to SSID\n'adafruit':");
-  display.print("connected!");
-  display.println("IP: 10.0.1.23");
-  display.println("Sending val #0");
-  display.setCursor(0,0);
+  display.println("OLED initialized");
+  display.println("Gettin' ready...");
   display.display(); // actually display all of the above
 
   Serial.println("OLED OK");
@@ -290,6 +297,14 @@ void loop() {
 
   // Do we need to freak out?
   freakOut(t, h, c);
+
+  /*** Handle buttins ***/
+  if(!digitalRead(BUTTON_A)) display.print("A");
+  if(!digitalRead(BUTTON_B)) display.print("B");
+  if(!digitalRead(BUTTON_C)) display.print("C");
+  delay(10);
+  yield();
+  display.display();
 
   /*** Do some housekeeping - maintenance, logging, and output once the loop count thresholds are reached ***/
   /*** Maintenance ***/
