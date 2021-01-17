@@ -147,8 +147,10 @@ void doLogging() {
   /*** Send message ***/
   // Create log string for these values
   char* message = new char[MAX_MSG];
-  sprintf(message, "TMP:%f;HUM:%f;CO2:%f;ID:%s", tmpAvg, humAvg, co2Avg, uid);
-  Serial.println(uid);
+  String tmpStr = "TMP:" + String(tmpAvg) + ";HUM:" + String(humAvg);
+  tmpStr += ";CO2:" + String(co2Avg) + ";ID:" + uid;
+  Serial.println(tmpStr);
+  sprintf(message, "%s", tmpStr);
   Serial.println(message);
 
   // Send LoRa message via RFM9x
