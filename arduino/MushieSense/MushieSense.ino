@@ -194,7 +194,7 @@ void setup() {
     Serial.println("DISABLED");
   }
   heaterLastToggled = loopTime;
-  Serial.println("SHT31 OK);
+  Serial.println("SHT31 OK");
   // End SHT31
   /*** End sensors test ***/
   
