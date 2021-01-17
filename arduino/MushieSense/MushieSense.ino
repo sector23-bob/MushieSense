@@ -1,8 +1,11 @@
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include <Arduino.h>
 #include <ArduinoUniqueID.h>
 #include <RH_RF95.h>
 #include <SPI.h>
 #include <Wire.h>
+
 #include "Adafruit_SHT31.h"
 
 // Colors
@@ -18,12 +21,9 @@
 // Control values
 #define LOG_CNT 30    // Number of loops to average values over
 #define DELAY   120   // Delay per loop, in ms
-#define FAN_PIN 2     // We'll use pin 2 to control the fan
 
 #define HEATER_DELAY      30*1000       // Delay between heater cycle
 #define WRITE_DELAY       5*60*1000     // Time between disk writes
-#define FAN_DELAY         10*60*1000    // Time between fan activation
-#define FAN_DURATION      60*1000       // Duration for fan operation
 #define DISPLAY_DURATION  5*1000        // Display on time on button press
 
 // Climate control limits
@@ -47,17 +47,41 @@
 #define RFM95_FREQ  915.0 // Frequency for radio
 #define MAX_MSG     252   // Maximum message size in bytes     
 
-// Pin for fan control
-#define FAN_PIN     2     // We'll control the fan with digital pin 2
+// OLED FeatherWing buttons map to different pins depending on board:
+#if defined(ESP8266)
+  #define BUTTON_A  0
+  #define BUTTON_B 16
+  #define BUTTON_C  2
+#elif defined(ESP32)
+  #define BUTTON_A 15
+  #define BUTTON_B 32
+  #define BUTTON_C 14
+#elif defined(ARDUINO_STM32_FEATHER)
+  #define BUTTON_A PA15
+  #define BUTTON_B PC7
+  #define BUTTON_C PC5
+#elif defined(TEENSYDUINO)
+  #define BUTTON_A  4
+  #define BUTTON_B  3
+  #define BUTTON_C  8
+#elif defined(ARDUINO_FEATHER52832)
+  #define BUTTON_A 31
+  #define BUTTON_B 30
+  #define BUTTON_C 27
+#else // 32u4, M0, M4, nrf52840 and 328p
+  #define BUTTON_A  9
+  #define BUTTON_B  6
+  #define BUTTON_C  5
+#endif
 
 // Unique ID
-char* uid;
-
-// Hex array
-static char hex[] = "0123456789ABCDEF";
+String uid;
 
 // Temp/humidity sensor
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
+
+// OLED display
+Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
 
 // LoRa module RFM9x
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
@@ -65,13 +89,9 @@ RH_RF95 rf95(RFM95_CS, RFM95_INT);
 // Enable/disable heater on SHT31
 bool enableHeater = false;
 
-// Enable/disable fan on GIO2
-bool enableFan = false;
-
 // Timing variables
 unsigned long loopTime;
 unsigned long heaterLastToggled;
-unsigned long fanLastOn;
 
 // Loop counter
 uint8_t loopCnt = 0;
@@ -102,8 +122,7 @@ void handleSensorError() {
 }
 
 /*!
-  @brief Average sccumulated sensor values, perform logging actions
-  @param loopTime Time to record for logging
+  @brief Average sccumulated sensor values, send them via LoRa with device ID
  */
 void doLogging() {
   /*** Get averages ***/
@@ -120,34 +139,19 @@ void doLogging() {
   float humAvg = humSum/LOG_CNT;
   float co2Avg = co2Sum/LOG_CNT;
 
-  // Re-zero sensor read arrays
+  /*** Re-zero sensor read arrays ***/
   memset(tmpVals, 0.0, sizeof(tmpVals));
   memset(humVals, 0.0, sizeof(humVals));
   memset(co2Vals, 0.0, sizeof(co2Vals));
-  /*** End averages ***/
-
-  /*** Perform logging actions ***/
+  
+  /*** Send message ***/
   // Create log string for these values
-  char* message = createLogString(tmpAvg, humAvg, co2Avg);
+  char* message = new char[MAX_MSG];
+  sprintf(message, "TMP:%f;HUM:%f;CO2:%f;ID:%s", tmpAvg, humAvg, co2Avg, uid);
+  Serial.println(uid);
+  Serial.println(message);
 
   // Send LoRa message via RFM9x
-  txLoRa(message);
-  /*** End logging actions ***/
-}
-
-char* createLogString(float tmp, float hum, float co2) {
-  char message[1024];
-  sprintf(message, "%f | %f | %f | %s", tmp, hum, co2, uid);
-  Serial.println(message);
-  return message;
-}
-
-/*!
-  @brief Send a message using the LoRa radio
-  @param message Message to be sent
-  TODO: Check message length in bytes < MAX_MSG
- */
-void txLoRa(const char* message) {
   rf95.send((uint8_t*) message, strlen(message));
   rf95.waitPacketSent();
 }
@@ -161,12 +165,11 @@ void setup() {
   Serial.println("Initializing...");
   loopTime = millis();
 
-  uid = new char[16];
+  uid = "";
   UniqueID8dump(Serial);
   for (size_t i = 0; i < 8; i++)
   {
-    uid[(i*2) + 0] = hex[((UniqueID8[i] & 0xF0) >> 4)];
-    uid[(i*2) + 1] = hex[((UniqueID8[i] & 0x0F) >> 0)];
+    uid += String(UniqueID8[i], HEX);
   }
   Serial.print("Unique ID: "); Serial.println(uid);
 
@@ -191,25 +194,15 @@ void setup() {
     Serial.println("DISABLED");
   }
   heaterLastToggled = loopTime;
+  Serial.println("SHT31 OK);
   // End SHT31
   /*** End sensors test ***/
-
-  /*** Set up fan control ***/
-  pinMode(FAN_PIN, OUTPUT);
-  // Manual reset and test
-  digitalWrite(FAN_PIN, LOW);
-  delay(10);
-  digitalWrite(FAN_PIN, HIGH);
-  delay(500);
-  digitalWrite(FAN_PIN, LOW);
-  fanLastOn = loopTime;
-  Serial.println("Fan OK");
   
   /*** Set up LoRa ***/
   pinMode(RFM95_RST, OUTPUT);
   // Manual reset and test
   digitalWrite(RFM95_RST, HIGH);
-  delay(100);
+  delay(10);
   digitalWrite(RFM95_RST, LOW);
   delay(10);
   digitalWrite(RFM95_RST, HIGH);
@@ -230,8 +223,16 @@ void setup() {
   Serial.print("Set Freq to: "); Serial.println(RFM95_FREQ);
   /*** End LoRa setup ***/
 
+  /*** OLED setup ***/
+  Serial.println("OLED FeatherWing test");
+  // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
+
+  Serial.println("OLED OK");
+  /*** End OLED ***/
+  
   int time = millis() - loopTime;
-  Serial.printf("Setup took %d ms\n", time);
+  Serial.print("Setup took "); Serial.print(time); Serial.println(" ms");
   Serial.flush();
 }
 
@@ -277,21 +278,6 @@ void loop() {
     heaterLastToggled = loopTime;
   }
   
-  // Fan
-  if (! enableFan) {
-    if (loopTime - fanLastOn >= FAN_DELAY) {
-      Serial.println("Enabling fan");
-      digitalWrite(FAN_PIN, HIGH);
-      enableFan = true;
-      fanLastOn = loopTime;
-    }
-  } else { //enableFan is true
-    if (loopTime - fanLastOn >= FAN_DURATION) {
-      Serial.println("Disabling fan");
-      digitalWrite(FAN_PIN, LOW);
-      enableFan = false;
-    }
-  }
   /*** End maintenance ***/
 
   /*** Logging ***/
