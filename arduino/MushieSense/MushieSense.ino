@@ -19,12 +19,9 @@
 
 // Not Colors
 // Control values
-#define LOOP_CNT  30    // Number of loops to average values over
-#define DELAY     120   // Delay per loop, in ms
-
-#define HEATER_DELAY      30*1000       // Delay between heater cycle
-#define WRITE_DELAY       5*60*1000     // Time between disk writes
-#define DISPLAY_DURATION  5*1000        // Display on time on button press
+#define LOOP_CNT      30        // Number of loops to average values over
+#define LOOP_DELAY    120       // Delay per loop, in ms
+#define HEATER_DELAY  30*1000   // Delay between heater cycles, in ms
 
 // Climate control limits
 #define MAXTEMP 90.0    // Set ref. Stamets
@@ -34,64 +31,67 @@
 #define MAXCO2  0.0     // TODO - set this ref. Stamets
 #define MINCO2  0.0     // TODO - set this ref. Stamets
 
-// RFM9x module stuff
+// RFM9x module stuff, currently only supporting ESP8266 and onboard M0
 #if defined(ESP8266)
-  #define RFM95_CS    2     // "E" pin for RFM9x
-  #define RFM95_RST   16    // "D" pin for RFM9x
-  #define RFM95_INT   15    // "B" pin for RFM9x
+  #define RFM95_CS  2     // "E" pin for RFM9x
+  #define RFM95_RST 16    // "D" pin for RFM9x
+  #define RFM95_INT 15    // "B" pin for RFM9x
 #else
-  #define RFM95_CS    8   // On-board Feather M0 module
-  #define RFM95_RST   4   // On-board Feather M0 module
-  #define RFM95_INT   3   // On-board Feather M0 module
+  #define RFM95_CS  8   // Onboard Feather M0 module
+  #define RFM95_RST 4   // Onboard Feather M0 module
+  #define RFM95_INT 3   // Onboard Feather M0 module
 #endif
 #define RFM95_FREQ  915.0 // Frequency for radio
 #define MAX_MSG     252   // Maximum message size in bytes     
 
-// OLED FeatherWing buttons map to different pins depending on board:
+// OLED FeatherWing stuff
+// Buttons map to different pins depending on board:
 #if defined(ESP8266)
   #define BUTTON_A  0
-  #define BUTTON_B 16
+  #define BUTTON_B  16
   #define BUTTON_C  2
 #elif defined(ESP32)
-  #define BUTTON_A 15
-  #define BUTTON_B 32
-  #define BUTTON_C 14
+  #define BUTTON_A  15
+  #define BUTTON_B  32
+  #define BUTTON_C  14
 #elif defined(ARDUINO_STM32_FEATHER)
-  #define BUTTON_A PA15
-  #define BUTTON_B PC7
-  #define BUTTON_C PC5
+  #define BUTTON_A  PA15
+  #define BUTTON_B  PC7
+  #define BUTTON_C  PC5
 #elif defined(TEENSYDUINO)
   #define BUTTON_A  4
   #define BUTTON_B  3
   #define BUTTON_C  8
 #elif defined(ARDUINO_FEATHER52832)
-  #define BUTTON_A 31
-  #define BUTTON_B 30
-  #define BUTTON_C 27
+  #define BUTTON_A  31
+  #define BUTTON_B  30
+  #define BUTTON_C  27
 #else // 32u4, M0, M4, nrf52840 and 328p
   #define BUTTON_A  9
   #define BUTTON_B  6
   #define BUTTON_C  5
 #endif
+#define DISPLAY_DURATION  5*1000  // OLED active time on button press
 
-// Unique ID
+// Unique ID for this board
 String uid;
 
 // Temp/humidity sensor
-Adafruit_SHT31 sht31 = Adafruit_SHT31();
+Adafruit_SHT31  sht31;              // Module
+unsigned long   heaterLastToggled;  // Last time heater was on, in ms from prog. start
+bool            enableHeater;       // Enable/disable heater on SHT31
 
 // OLED display
-Adafruit_SSD1306 display = Adafruit_SSD1306(128, 32, &Wire);
+Adafruit_SSD1306  display;            // Module
+String            oledMessage;        // Message for OLED display
+bool              displayActive;      // Activate OLED
+unsigned long     displayLastActive;  // Last time active, in ms from prog.start
 
 // LoRa module RFM9x
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
-// Enable/disable heater on SHT31
-bool enableHeater = false;
-
-// Timing variables
+// Time in ms since program start
 unsigned long loopTime;
-unsigned long heaterLastToggled;
 
 // Loop counter
 uint8_t loopCnt = 0;
@@ -125,11 +125,20 @@ void handleSensorError() {
   @brief Clear the OLED display and show the text passed in
   @param text Text to be displayed
  */
-void oledDisplay(String text) {
+void _oledDisplay(String text) {
   display.clearDisplay();
   display.setCursor(0,0);
   display.print(text);
+  delay(10);
+  yield();
   display.display();
+}
+
+/*!
+  @brief Toggle OLED display on, display stored message
+ */
+void oledDisplay() {
+  _oledDisplay(oledMessage);
 }
 
 /*!
@@ -159,8 +168,8 @@ void doLogging() {
   // Create log string for these values
   String tmpStr = "TMP:" + String(tmpAvg) + ";HUM:" + String(humAvg);
   tmpStr += ";CO2:" + String(co2Avg) + ";ID:" + uid + '\0';
-  oledDisplay(tmpStr);
-
+  oledMessage = tmpStr;
+  
   // Send LoRa message via RFM9x
   static char* message = new char[min(tmpStr.length(), MAX_MSG)];
   tmpStr.toCharArray(message, tmpStr.length());
@@ -190,14 +199,17 @@ void setup() {
   memset(humVals, 0.0, sizeof(humVals));
   memset(co2Vals, 0.0, sizeof(co2Vals));
 
-  /*** Test sensors ***/
+  /*** Sensors ***/
   // SHT31
+  sht31 = Adafruit_SHT31();
   Serial.println("SHT31 test");
   if (! sht31.begin(0x44)) {   // Set to 0x45 for alternate i2c addr
     Serial.println("Couldn't find SHT31");
     while (1) delay(1);
   }
-
+  enableHeater = false;
+  sht31.heater(enableHeater);
+  //assert(! sht31.isHeaterEnabled()); // BUG - assert not declared? WTF?
   Serial.print("Heater Enabled State: ");
   if (sht31.isHeaterEnabled()) {
     Serial.println("ENABLED");
@@ -236,27 +248,29 @@ void setup() {
   /*** End LoRa setup ***/
 
   /*** OLED setup ***/
-  Serial.println("OLED FeatherWing test");
+  // TODO - Detect if OLED not present
+  Serial.println("OLED setup");
+  display = Adafruit_SSD1306(128, 32, &Wire);
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
 
   // Clear the buffer.
+  display.clearDisplay();
   display.display();
 
+  // Buttons
   Serial.println("IO test");
-
   pinMode(BUTTON_A, INPUT_PULLUP);
   pinMode(BUTTON_B, INPUT_PULLUP);
   pinMode(BUTTON_C, INPUT_PULLUP);
 
   // text display tests
-  display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
-  display.setCursor(0,0);
-  display.println("OLED initialized");
-  display.println("Gettin' ready...");
-  display.display(); // actually display all of the above
+  oledMessage = "OLED OK.";
+  displayActive = true;
+  displayLastActive = loopTime;
+  oledDisplay();
 
   Serial.println("OLED OK");
   /*** End OLED ***/
@@ -298,14 +312,22 @@ void loop() {
   // Do we need to freak out?
   freakOut(t, h, c);
 
-  /*** Handle buttins ***/
-  if(!digitalRead(BUTTON_A)) display.print("A");
-  if(!digitalRead(BUTTON_B)) display.print("B");
-  if(!digitalRead(BUTTON_C)) display.print("C");
-  delay(10);
-  yield();
-  display.display();
-
+  /*** OLED display ***/
+  if ((! digitalRead(BUTTON_A)) or (! digitalRead(BUTTON_B)) or (! digitalRead(BUTTON_C))) {
+    displayActive = true;
+    displayLastActive = loopTime;
+  }
+  
+  if (displayActive) {
+    oledDisplay();
+    if ((loopTime - displayLastActive) > DISPLAY_DURATION) {
+      display.clearDisplay();
+      displayActive = false;
+      display.display();
+    }
+  }
+  /*** End OLED ***/
+  
   /*** Do some housekeeping - maintenance, logging, and output once the loop count thresholds are reached ***/
   /*** Maintenance ***/
   // Heater
@@ -330,6 +352,6 @@ void loop() {
   /*** End logging ***/
   /*** End housekeeping ***/
   
-  delay(DELAY);
+  delay(LOOP_DELAY);
 
 }

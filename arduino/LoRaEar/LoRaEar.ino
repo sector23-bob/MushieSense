@@ -64,7 +64,7 @@ static char hex[] = "0123456789ABCDEF";
 
 // Timing variables
 unsigned long loopTime;
-unsigned long displayActiveAt;
+unsigned long displayLastActive;
 
 bool displayActive = false;
 
@@ -120,7 +120,7 @@ void setup() {
   display.setCursor(0,0);
   display.print("Gettin' ready");
   display.display();
-  displayActiveAt = loopTime; // Initialize here
+  displayLastActive = loopTime; // Initialize here
   /*** End OLED ***/
 
   /*** Set up LoRa ***/
@@ -156,7 +156,7 @@ void loop() {
 
   if ((! digitalRead(BUTTON_A)) or (! digitalRead(BUTTON_B)) or (! digitalRead(BUTTON_C))) {
     displayActive = true;
-    displayActiveAt = loopTime;
+    displayLastActive = loopTime;
   }
     
   if (displayActive) {
@@ -164,7 +164,7 @@ void loop() {
     display.setCursor(0, 0);
     display.print(displayMsg);
     display.display();
-    if ((loopTime - displayActiveAt) > DISPLAY_DURATION) {
+    if ((loopTime - displayLastActive) > DISPLAY_DURATION) {
       display.clearDisplay();
       displayActive = false;
       display.display();
