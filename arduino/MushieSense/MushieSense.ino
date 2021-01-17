@@ -146,15 +146,15 @@ void doLogging() {
   
   /*** Send message ***/
   // Create log string for these values
-  char* message = new char[MAX_MSG];
+  static char* message = new char[MAX_MSG];
   String tmpStr = "TMP:" + String(tmpAvg) + ";HUM:" + String(humAvg);
-  tmpStr += ";CO2:" + String(co2Avg) + ";ID:" + uid;
+  tmpStr += ";CO2:" + String(co2Avg) + ";ID:" + uid + '\0';
   Serial.println(tmpStr);
-  sprintf(message, "%s", tmpStr);
+  tmpStr.toCharArray(message, tmpStr.length());
   Serial.println(message);
 
   // Send LoRa message via RFM9x
-  rf95.send((uint8_t*) message, strlen(message));
+  rf95.send((uint8_t*) message, strlen(message)+1);
   rf95.waitPacketSent();
 }
 
@@ -229,6 +229,27 @@ void setup() {
   Serial.println("OLED FeatherWing test");
   // SSD1306_SWITCHCAPVCC = generate display voltage from 3.3V internally
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C); // Address 0x3C for 128x32
+
+  // Clear the buffer.
+  display.clearDisplay();
+  display.display();
+
+  Serial.println("IO test");
+
+  pinMode(BUTTON_A, INPUT_PULLUP);
+  pinMode(BUTTON_B, INPUT_PULLUP);
+  pinMode(BUTTON_C, INPUT_PULLUP);
+
+  // text display tests
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.print("Connecting to SSID\n'adafruit':");
+  display.print("connected!");
+  display.println("IP: 10.0.1.23");
+  display.println("Sending val #0");
+  display.setCursor(0,0);
+  display.display(); // actually display all of the above
 
   Serial.println("OLED OK");
   /*** End OLED ***/
