@@ -19,8 +19,8 @@
 
 // Not Colors
 // Control values
-#define LOG_CNT 30    // Number of loops to average values over
-#define DELAY   120   // Delay per loop, in ms
+#define LOOP_CNT  30    // Number of loops to average values over
+#define DELAY     120   // Delay per loop, in ms
 
 #define HEATER_DELAY      30*1000       // Delay between heater cycle
 #define WRITE_DELAY       5*60*1000     // Time between disk writes
@@ -97,9 +97,9 @@ unsigned long heaterLastToggled;
 uint8_t loopCnt = 0;
 
 // Arrays for sensor readings
-float tmpVals[LOG_CNT];
-float humVals[LOG_CNT];
-float co2Vals[LOG_CNT];
+float tmpVals[LOOP_CNT];
+float humVals[LOOP_CNT];
+float co2Vals[LOOP_CNT];
 
 /*!
   @brief Do something if calculated values exceed defined parameters TODO
@@ -130,14 +130,14 @@ void doLogging() {
   float humSum = 0.0;
   float co2Sum = 0.0;
 
-  for (int i = 0; i < LOG_CNT; i++) {
+  for (int i = 0; i < LOOP_CNT; i++) {
     tmpSum += tmpVals[i];
     humSum += humVals[i];
     co2Sum += co2Vals[i];
   }
-  float tmpAvg = tmpSum/LOG_CNT;
-  float humAvg = humSum/LOG_CNT;
-  float co2Avg = co2Sum/LOG_CNT;
+  float tmpAvg = tmpSum/LOOP_CNT;
+  float humAvg = humSum/LOOP_CNT;
+  float co2Avg = co2Sum/LOOP_CNT;
 
   /*** Re-zero sensor read arrays ***/
   memset(tmpVals, 0.0, sizeof(tmpVals));
@@ -247,19 +247,19 @@ void loop() {
   float c = 0.0; // CO2 sensor TODO
   
   if (! isnan(t)) {
-    tmpVals[loopCnt % LOG_CNT] = t;
+    tmpVals[loopCnt % LOOP_CNT] = t;
   } else { 
     Serial.println("Failed to read temperature");
   }
   
   if (! isnan(h)) {
-    humVals[loopCnt % LOG_CNT] = h;
+    humVals[loopCnt % LOOP_CNT] = h;
   } else { 
     Serial.println("Failed to read humidity");
   }
 
   if (! isnan(c)) {
-    co2Vals[loopCnt % LOG_CNT] = c;
+    co2Vals[loopCnt % LOOP_CNT] = c;
   } else {
     Serial.println("Failed to read CO2");
   }
@@ -281,7 +281,7 @@ void loop() {
   /*** End maintenance ***/
 
   /*** Logging ***/
-  if (++loopCnt % LOG_CNT == 0) {
+  if (++loopCnt % LOOP_CNT == 0) {
     doLogging();
 
     if (loopCnt > 200) {
