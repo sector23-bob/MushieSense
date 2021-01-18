@@ -69,10 +69,10 @@ unsigned long displayLastActive;
 bool displayActive = false;
 
 // OLED message
-char* displayMsg = {"Waiting..."};
+String displayMsg = "Waiting...";
 
 // Unique ID
-char* uid;
+String uid;
 
 void setup() {
   Serial.begin(115200);
@@ -84,13 +84,11 @@ void setup() {
   Serial.println("Initializing...");
   loopTime = millis();
 
-  uid = new char[UniqueIDsize];
-  UniqueIDdump(Serial);
-  for (size_t i = 0; i < UniqueIDsize; i++)
+  uid = "";
+  UniqueID8dump(Serial);
+  for (size_t i = 0; i < 8; i++)
   {
-    uid[(i*2) + 0] = hex[((UniqueID[i] & 0xF0) >> 4)];
-    uid[(i*2) + 1] = hex[((UniqueID[i] & 0x0F) >> 0)];
-    //uid[i] = hex[UniqueID[i]];
+    uid += String(UniqueID8[i], HEX);
   }
   Serial.print("Unique ID: "); Serial.println(uid);
 
@@ -173,11 +171,12 @@ void loop() {
   
   if (rf95.available()) {
     uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
-    uint8_t len = sizeof(buf);
-    if (rf95.recv(buf, &len)) {
-      Serial.print("got request: ");
+    uint8_t bufSize = sizeof(buf);
+    if (rf95.recv(buf, &bufSize)) {
+      Serial.println(bufSize);
+      Serial.print("Received: ");
       Serial.println((char*) buf);
-      displayMsg = (char*) buf;
+      displayMsg = String((char*) buf);
     }
     else {
       Serial.println("recv failed");
