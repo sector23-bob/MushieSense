@@ -33,13 +33,13 @@
 
 // RFM9x module stuff, currently only supporting ESP8266 and onboard M0
 #if defined(ESP8266)
-  #define RFM95_CS  2     // "E" pin for RFM9x
-  #define RFM95_RST 16    // "D" pin for RFM9x
-  #define RFM95_INT 15    // "B" pin for RFM9x
+#define RFM95_CS  2     // "E" pin for RFM9x
+#define RFM95_RST 16    // "D" pin for RFM9x
+#define RFM95_INT 15    // "B" pin for RFM9x
 #else
-  #define RFM95_CS  8   // Onboard Feather M0 module
-  #define RFM95_RST 4   // Onboard Feather M0 module
-  #define RFM95_INT 3   // Onboard Feather M0 module
+#define RFM95_CS  8   // Onboard Feather M0 module
+#define RFM95_RST 4   // Onboard Feather M0 module
+#define RFM95_INT 3   // Onboard Feather M0 module
 #endif
 #define RFM95_FREQ  915.0 // Frequency for radio
 #define MAX_MSG     252   // Maximum message size in bytes     
@@ -47,29 +47,29 @@
 // OLED FeatherWing stuff
 // Buttons map to different pins depending on board:
 #if defined(ESP8266)
-  #define BUTTON_A  0
-  #define BUTTON_B  16
-  #define BUTTON_C  2
+#define BUTTON_A  0
+#define BUTTON_B  16
+#define BUTTON_C  2
 #elif defined(ESP32)
-  #define BUTTON_A  15
-  #define BUTTON_B  32
-  #define BUTTON_C  14
+#define BUTTON_A  15
+#define BUTTON_B  32
+#define BUTTON_C  14
 #elif defined(ARDUINO_STM32_FEATHER)
-  #define BUTTON_A  PA15
-  #define BUTTON_B  PC7
-  #define BUTTON_C  PC5
+#define BUTTON_A  PA15
+#define BUTTON_B  PC7
+#define BUTTON_C  PC5
 #elif defined(TEENSYDUINO)
-  #define BUTTON_A  4
-  #define BUTTON_B  3
-  #define BUTTON_C  8
+#define BUTTON_A  4
+#define BUTTON_B  3
+#define BUTTON_C  8
 #elif defined(ARDUINO_FEATHER52832)
-  #define BUTTON_A  31
-  #define BUTTON_B  30
-  #define BUTTON_C  27
+#define BUTTON_A  31
+#define BUTTON_B  30
+#define BUTTON_C  27
 #else // 32u4, M0, M4, nrf52840 and 328p
-  #define BUTTON_A  9
-  #define BUTTON_B  6
-  #define BUTTON_C  5
+#define BUTTON_A  9
+#define BUTTON_B  6
+#define BUTTON_C  5
 #endif
 #define DISPLAY_DURATION  5*1000  // OLED active time on button press
 
@@ -106,17 +106,17 @@ float co2Vals[LOOP_CNT];
   @param tmp Temperature to check vs. MAXTEMP, MINTEMP
   @param hum Humidity% to check vs. MAXHUM, MINHUM
   @param co2 CO2 ppm to check vs. MAXCO2, MINCO2
- */
+*/
 void freakOut(float tmp, float hum, float co2) {
-    bool tmpExceed = (tmp > MAXTEMP) or (tmp < MINTEMP);
-    bool humExceed = (hum > MAXHUM) or (hum < MINHUM);
-    bool co2Exceed = false; //(co2 > MAXCO2) or (co2 < MINCO2); // TODO
-    // Do something?
+  bool tmpExceed = (tmp > MAXTEMP) or (tmp < MINTEMP);
+  bool humExceed = (hum > MAXHUM) or (hum < MINHUM);
+  bool co2Exceed = false; //(co2 > MAXCO2) or (co2 < MINCO2); // TODO
+  // Do something?
 }
 
 /*!
   @brief Functionality to handle sensor errors TODO
- */
+*/
 void handleSensorError() {
   ;
 }
@@ -124,10 +124,10 @@ void handleSensorError() {
 /*!
   @brief Clear the OLED display and show the text passed in
   @param text Text to be displayed
- */
+*/
 void _oledDisplay(String text) {
   display.clearDisplay();
-  display.setCursor(0,0);
+  display.setCursor(0, 0);
   display.print(text);
   delay(10);
   yield();
@@ -136,14 +136,14 @@ void _oledDisplay(String text) {
 
 /*!
   @brief Toggle OLED display on, display stored message
- */
+*/
 void oledDisplay() {
   _oledDisplay(oledMessage);
 }
 
 /*!
   @brief Average sccumulated sensor values, send them via LoRa with device ID
- */
+*/
 void doLogging() {
   /*** Get averages ***/
   float tmpSum = 0.0;
@@ -155,21 +155,21 @@ void doLogging() {
     humSum += humVals[i];
     co2Sum += co2Vals[i];
   }
-  float tmpAvg = tmpSum/LOOP_CNT;
-  float humAvg = humSum/LOOP_CNT;
-  float co2Avg = co2Sum/LOOP_CNT;
+  float tmpAvg = tmpSum / LOOP_CNT;
+  float humAvg = humSum / LOOP_CNT;
+  float co2Avg = co2Sum / LOOP_CNT;
 
   /*** Re-zero sensor read arrays ***/
   memset(tmpVals, 0.0, sizeof(tmpVals));
   memset(humVals, 0.0, sizeof(humVals));
   memset(co2Vals, 0.0, sizeof(co2Vals));
-  
+
   /*** Send message ***/
   // Create log string for these values
   String tmpStr = "TMP:" + String(tmpAvg) + ";HUM:" + String(humAvg);
   tmpStr += ";CO2:" + String(co2Avg) + ";ID:" + uid + '\0';
   oledMessage = tmpStr;
-  
+
   // Send LoRa message via RFM9x
   static char* message = new char[min(tmpStr.length(), MAX_MSG)];
   tmpStr.toCharArray(message, tmpStr.length());
@@ -179,7 +179,7 @@ void doLogging() {
 
 void setup() {
   Serial.begin(115200);
-  
+
   Serial.println("Initializing...");
   loopTime = millis();
 
@@ -218,7 +218,7 @@ void setup() {
   Serial.println("SHT31 OK");
   // End SHT31
   /*** End sensors test ***/
-  
+
   /*** Set up LoRa ***/
   pinMode(RFM95_RST, OUTPUT);
   // Manual reset and test
@@ -271,7 +271,7 @@ void setup() {
 
   Serial.println("OLED OK");
   /*** End OLED ***/
-  
+
   int time = millis() - loopTime;
   Serial.print("Setup took "); Serial.print(time); Serial.println(" ms");
   Serial.flush();
@@ -281,21 +281,21 @@ void setup() {
 void loop() {
   /*** Record start time for this loop ***/
   loopTime = millis();
-  
+
   /*** Read sensor vals ***/
-  float t = sht31.readTemperature()*1.8 + 32.0; // Convert to F
+  float t = sht31.readTemperature() * 1.8 + 32.0; // Convert to F
   float h = sht31.readHumidity();
   float c = 0.0; // CO2 sensor TODO
-  
+
   if (! isnan(t)) {
     tmpVals[loopCnt % LOOP_CNT] = t;
-  } else { 
+  } else {
     Serial.println("Failed to read temperature");
   }
-  
+
   if (! isnan(h)) {
     humVals[loopCnt % LOOP_CNT] = h;
-  } else { 
+  } else {
     Serial.println("Failed to read humidity");
   }
 
@@ -305,6 +305,7 @@ void loop() {
     Serial.println("Failed to read CO2");
   }
   /*** End sensor read ***/
+  Serial.print(t); Serial.print(" | "); Serial.print(h); Serial.print(" | "); Serial.println(c);
 
   // Do we need to freak out?
   freakOut(t, h, c);
@@ -314,7 +315,7 @@ void loop() {
     displayActive = true;
     displayLastActive = loopTime;
   }
-  
+
   if (displayActive) {
     oledDisplay();
     if ((loopTime - displayLastActive) > DISPLAY_DURATION) {
@@ -324,7 +325,7 @@ void loop() {
     }
   }
   /*** End OLED ***/
-  
+
   /*** Do some housekeeping - maintenance, logging, and output once the loop count thresholds are reached ***/
   /*** Maintenance ***/
   // Heater
@@ -334,7 +335,7 @@ void loop() {
     sht31.heater(enableHeater);
     heaterLastToggled = loopTime;
   }
-  
+
   /*** End maintenance ***/
 
   /*** Logging ***/
@@ -343,12 +344,11 @@ void loop() {
 
     if (loopCnt > 200) {
       loopCnt = 0;
-      //Serial.printf("%f | %f | %f\n", t, h, c);
     }
   }
   /*** End logging ***/
   /*** End housekeeping ***/
-  
+
   delay(LOOP_DELAY);
 
 }
